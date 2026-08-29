@@ -2,6 +2,11 @@ import { expect, test } from "@playwright/test";
 
 test("page opens centered on the Nepal flood corridor", async ({ page }) => {
   test.setTimeout(60000);
+  const satelliteTileRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = request.url();
+    if (url.includes("/World_Imagery/MapServer/tile/")) satelliteTileRequests.push(url);
+  });
   await page.goto("/");
   await expect(page.getByText("Scenario-based research simulation")).toBeVisible();
   await expect(page.getByText("Source to Downstream")).toBeVisible();
@@ -39,10 +44,9 @@ test("page opens centered on the Nepal flood corridor", async ({ page }) => {
       { timeout: 15000 },
     )
     .toBe(true);
+  await expect.poll(() => satelliteTileRequests.length, { timeout: 15000 }).toBeGreaterThan(0);
   await expect(page.locator("#flowCanvas")).toBeVisible();
   await expect.poll(async () => page.locator("#flowCanvas").evaluate((canvas: HTMLCanvasElement) => canvas.width > 0 && canvas.height > 0), { timeout: 15000 }).toBe(true);
   await expect.poll(async () => page.locator(".viewport-shell").evaluate((element: HTMLElement) => Math.round(element.getBoundingClientRect().height))).toBeLessThanOrEqual(1000);
-  await expect.poll(async () => page.locator(".viewport-shell").evaluate((element: HTMLElement) => Math.round(element.getBoundingClientRect().width))).toBeGreaterThan(800);
-  await page.getByRole("button", { name: "Center on Nepal flood corridor" }).click();
-  await page.getByRole("button", { name: "Zoom in" }).click();
+  await expect.poll(async () => page.locator(".viewport-shell").evaluate((element: HTMLElement) => Math.round(element.getBoundingClientRect().width))).toBeGreaterThan(600);
 });

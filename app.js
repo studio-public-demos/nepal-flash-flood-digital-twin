@@ -437,13 +437,13 @@ async function initImageryProvider(Cesium, token) {
     try {
       return await Cesium.IonImageryProvider.fromAssetId(2);
     } catch (error) {
-      console.warn("Cesium ion imagery unavailable; falling back to OpenStreetMap imagery.", error);
+      console.warn("Cesium ion imagery unavailable; falling back to public satellite imagery.", error);
     }
   }
   return new Cesium.UrlTemplateImageryProvider({
-    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    credit: "OpenStreetMap contributors",
-    maximumLevel: 18
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    credit: "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+    maximumLevel: 19
   });
 }
 function loadScript(src, timeoutMs) {
