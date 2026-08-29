@@ -66,3 +66,21 @@ test("page opens centered on the Nepal flood corridor", async ({ page }) => {
     .toBe(true);
   await expect(page.locator("#flowCanvas")).toBeAttached();
 });
+
+test("mobile layout keeps the map usable without horizontal overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.goto("/");
+  await expect(page.getByText("Scenario-based research simulation")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Center on Nepal flood corridor" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run Scenario" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Compare with Reference" })).toBeVisible();
+  await expect(page.locator(".scenario-chip")).toBeHidden();
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        innerWidth: window.innerWidth,
+      })),
+    )
+    .toEqual({ scrollWidth: 360, innerWidth: 360 });
+});
