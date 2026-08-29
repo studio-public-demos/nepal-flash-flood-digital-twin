@@ -13,14 +13,6 @@ test("page opens centered on the Nepal flood corridor", async ({ page }) => {
   await expect(page.getByText("Upper catchment trigger")).toBeVisible();
   await expect(page.getByText("T+00 min | 26 Aug 2026, before first post-event collect")).toBeVisible();
   await expect(page.getByText("27 Aug 2026 02:00 UTC SkySat; 06:10 UTC Pelican")).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Map legend" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Legend/ })).toHaveAttribute("aria-expanded", "false");
-  await page.getByRole("button", { name: /Legend/ }).click();
-  await expect(page.getByRole("button", { name: /Legend/ })).toHaveAttribute("aria-expanded", "true");
-  await expect(page.locator("#legendBody")).toBeVisible();
-  await expect(page.locator("#legendBody")).toContainText("Modeled shallow inundation");
-  await expect(page.locator("#legendBody")).toContainText("Journey annotation with modeled T+ and real collect time");
-  await expect(page.locator("#legendBody")).toContainText("Observed Planet scene footprint");
   await expect(page.getByText("Real catalog + OSM layers")).toBeVisible();
   await expect(page.getByRole("button", { name: "Replay August 26, 2026 Reference Reconstruction" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Zoom in" })).toBeVisible();

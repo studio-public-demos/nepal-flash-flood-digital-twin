@@ -1468,12 +1468,6 @@ function bindControls() {
     track("methodology_opened");
     track("provenance_opened");
   });
-  $("#legendToggle").addEventListener("click", () => {
-    const legend = document.querySelector(".map-legend");
-    const collapsed = legend?.classList.toggle("is-collapsed") ?? false;
-    $("#legendToggle").setAttribute("aria-expanded", String(!collapsed));
-    track("legend_toggled", { expanded: !collapsed });
-  });
   $("#dismissOnboarding").addEventListener("click", () => $("#onboarding").remove());
   $("#zoomIn").addEventListener("click", () => zoomBy(0.55));
   $("#zoomOut").addEventListener("click", () => zoomBy(1.75));
