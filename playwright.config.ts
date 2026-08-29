@@ -4,6 +4,7 @@ export default defineConfig({
   testDir: "./tests/e2e",
   use: {
     baseURL: "http://127.0.0.1:4179",
+    reducedMotion: "reduce",
     viewport: { width: 1440, height: 1000 },
   },
   webServer: {

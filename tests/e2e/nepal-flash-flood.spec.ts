@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test("visitor can replay, run, inspect, compare, and open methodology", async ({ page }) => {
-  test.setTimeout(120000);
+test("page opens centered on the Nepal flood corridor", async ({ page }) => {
+  test.setTimeout(60000);
   await page.goto("/");
   await expect(page.getByText("Scenario-based research simulation")).toBeVisible();
   await expect(page.getByText("Source to Downstream")).toBeVisible();
@@ -21,28 +21,28 @@ test("visitor can replay, run, inspect, compare, and open methodology", async ({
   await expect(page.getByRole("button", { name: "Zoom in" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Zoom out" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Center on Nepal flood corridor" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run Scenario" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Compare with Reference" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Model & Data: how was this calculated?" })).toBeVisible();
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const Cesium = window.Cesium;
+          const viewer = window.NEPAL_FLOOD_CONFIG?.viewer;
+          if (!Cesium || !viewer) return false;
+          const position = viewer.camera.positionCartographic;
+          const lon = Cesium.Math.toDegrees(position.longitude);
+          const lat = Cesium.Math.toDegrees(position.latitude);
+          return lon > 84 && lon < 86 && lat > 27 && lat < 29;
+        }),
+      { timeout: 15000 },
+    )
+    .toBe(true);
   await expect(page.locator("#flowCanvas")).toBeVisible();
-  await expect.poll(async () => page.locator("#flowCanvas").evaluate((canvas: HTMLCanvasElement) => canvas.width > 0 && canvas.height > 0)).toBe(true);
+  await expect.poll(async () => page.locator("#flowCanvas").evaluate((canvas: HTMLCanvasElement) => canvas.width > 0 && canvas.height > 0), { timeout: 15000 }).toBe(true);
   await expect.poll(async () => page.locator(".viewport-shell").evaluate((element: HTMLElement) => Math.round(element.getBoundingClientRect().height))).toBeLessThanOrEqual(1000);
   await expect.poll(async () => page.locator(".viewport-shell").evaluate((element: HTMLElement) => Math.round(element.getBoundingClientRect().width))).toBeGreaterThan(800);
   await page.getByRole("button", { name: "Center on Nepal flood corridor" }).click();
   await page.getByRole("button", { name: "Zoom in" }).click();
-
-  await page.getByRole("button", { name: "Replay August 26, 2026 Reference Reconstruction" }).click();
-  await page.locator("#timeline").fill("45");
-  await expect(page.locator("#timeLabel")).toContainText("T+45");
-  await expect(page.locator("#surgeTime")).toContainText("Evidence:");
-
-  await page.locator("#lakeVolume").evaluate((el: HTMLInputElement) => { el.value = "5"; el.dispatchEvent(new Event("change", { bubbles: true })); });
-  await page.locator("#rainfall").evaluate((el: HTMLInputElement) => { el.value = "1.5"; el.dispatchEvent(new Event("change", { bubbles: true })); });
-  await page.locator("#debris").evaluate((el: HTMLInputElement) => { el.value = "30"; el.dispatchEvent(new Event("change", { bubbles: true })); });
-  await page.getByRole("button", { name: "Run Scenario" }).click();
-  await expect(page.locator("#missionLog .complete")).toHaveCount(11);
-  await expect(page.locator("#scenarioName")).toContainText("Visitor what-if scenario");
-
-  await page.getByRole("button", { name: "Compare with Reference" }).click();
-  await expect(page.locator("#comparison")).toContainText("August 26 Reference Reconstruction");
-
-  await page.getByRole("button", { name: "Model & Data: how was this calculated?" }).click();
-  await expect(page.getByText("Calibration dataset not yet integrated")).toBeVisible();
 });

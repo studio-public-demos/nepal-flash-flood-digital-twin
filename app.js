@@ -392,6 +392,7 @@ async function loadData() {
 async function loadRuntimeConfig() {
   const host = window.location.hostname;
   if (host && host !== "localhost" && host !== "127.0.0.1") return;
+  if (!new URLSearchParams(window.location.search).has("local-config")) return;
   try {
     const response = await fetch("./config.local.json", { cache: "no-store" });
     if (!response.ok) return;
@@ -522,11 +523,11 @@ async function initCesium() {
     state.viewer.imageryLayers.removeAll();
     state.viewer.imageryLayers.addImageryProvider(imageryProvider);
     state.viewer.scene.globe.depthTestAgainstTerrain = true;
+    focusCorridor(0);
     await sampleCorridorTerrain();
     drawStaticLayers();
     renderFrame();
     setupFluidCanvas();
-    focusCorridor(0);
   } catch (error) {
     console.error(error);
     container.innerHTML = `<div class="viewport-fallback"><strong>Terrain unavailable.</strong><span>Cesium started with a problem. The controls and data panels remain usable; reload or configure CESIUM_ION_TOKEN for terrain.</span></div>`;
@@ -538,12 +539,14 @@ async function sampleCorridorTerrain() {
   const centerline = state.currentRun.frames[0]?.centerline ?? [];
   if (!centerline.length) return;
   const offsets = [-2600, -1300, 0, 1300, 2600];
-  const samplePoints = centerline.flatMap(
-    (point, index) => offsets.map((offsetM) => {
+  const terrainStride = Math.max(1, Math.ceil(centerline.length / 55));
+  const samplePoints = centerline.flatMap((point, index) => {
+    if (index % terrainStride !== 0 && index !== centerline.length - 1) return [];
+    return offsets.map((offsetM) => {
       const [lon, lat] = offsetFromCenterline(centerline, index, offsetM);
       return { lon, lat, offsetM, centerIndex: index };
-    })
-  );
+    });
+  });
   const cartographics = samplePoints.map((sample) => Cesium.Cartographic.fromDegrees(sample.lon, sample.lat));
   try {
     const sampled = await withTimeout(Cesium.sampleTerrainMostDetailed(state.viewer.terrainProvider, cartographics), 8e3, "Terrain sampling timed out");
@@ -555,8 +558,9 @@ async function sampleCorridorTerrain() {
       centerIndex: samplePoints[index]?.centerIndex ?? 0
     }));
     state.terrainSamples = crossValleySamples.filter((sample) => sample.offsetM === 0);
-    state.terrainSections = centerline.map((point, index) => {
+    state.terrainSections = centerline.flatMap((point, index) => {
       const sectionSamples = crossValleySamples.filter((sample) => sample.centerIndex === index).sort((a, b) => a.offsetM - b.offsetM);
+      if (!sectionSamples.length) return [];
       const center = sectionSamples.find((sample) => sample.offsetM === 0) ?? {
         lon: point[0] ?? 0,
         lat: point[1] ?? 0,
