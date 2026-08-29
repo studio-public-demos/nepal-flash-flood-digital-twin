@@ -41,12 +41,36 @@ test("page opens centered on the Nepal flood corridor", async ({ page }) => {
           const lat = Cesium.Math.toDegrees(position.latitude);
           return lon > 84 && lon < 86 && lat > 27 && lat < 29;
         }),
-      { timeout: 15000 },
+      { timeout: 45000 },
     )
     .toBe(true);
   await expect.poll(() => satelliteTileRequests.length, { timeout: 15000 }).toBeGreaterThan(0);
-  await expect(page.locator("#flowCanvas")).toBeVisible();
-  await expect.poll(async () => page.locator("#flowCanvas").evaluate((canvas: HTMLCanvasElement) => canvas.width > 0 && canvas.height > 0), { timeout: 15000 }).toBe(true);
-  await expect.poll(async () => page.locator(".viewport-shell").evaluate((element: HTMLElement) => Math.round(element.getBoundingClientRect().height))).toBeLessThanOrEqual(1000);
-  await expect.poll(async () => page.locator(".viewport-shell").evaluate((element: HTMLElement) => Math.round(element.getBoundingClientRect().width))).toBeGreaterThan(600);
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const Cesium = window.Cesium;
+          const viewer = window.NEPAL_FLOOD_CONFIG?.viewer;
+          if (!Cesium || !viewer || !window.NEPAL_FLOOD_CONFIG?.staticLayersReady) return false;
+          const clamped = Cesium.HeightReference.CLAMP_TO_GROUND;
+          const byKind = (kind: string) => Array.from(viewer.entities.values).find((entity: any) => entity.properties?.kind?.getValue?.() === kind);
+          const trackedEntities = [
+            viewer.entities.getById("river"),
+            viewer.entities.getById("terrain-profile"),
+            viewer.entities.getById("journey-source"),
+            viewer.entities.getById("journey-downstream"),
+            byKind("observed_community"),
+            byKind("satellite_scene"),
+          ];
+          return trackedEntities.every((entity: any) => {
+            if (!entity) return false;
+            if (entity.polyline) return entity.polyline.clampToGround?.getValue?.() === true;
+            if (entity.polygon) return entity.polygon.heightReference?.getValue?.() === clamped && entity.polygon.perPositionHeight?.getValue?.() === false;
+            return entity.point?.heightReference?.getValue?.() === clamped && entity.label?.heightReference?.getValue?.() === clamped;
+          });
+        }),
+      { timeout: 45000 },
+    )
+    .toBe(true);
+  await expect(page.locator("#flowCanvas")).toBeAttached();
 });

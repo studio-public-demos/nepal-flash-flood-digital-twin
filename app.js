@@ -683,12 +683,13 @@ function northUp() {
 function drawStaticLayers() {
   if (!state.viewer || !window.Cesium) return;
   const Cesium = window.Cesium;
+  window.NEPAL_FLOOD_CONFIG = { ...window.NEPAL_FLOOD_CONFIG, staticLayersReady: false };
   const corridor = state.currentRun?.frames[0]?.centerline ?? [];
   state.viewer.entities.add({
     id: "river",
     name: "Bhote Koshi / Trishuli derived river corridor",
     polyline: {
-      positions: corridor.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, 30)),
+      positions: corridor.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat)),
       width: 4,
       material: Cesium.Color.fromCssColorString("#0ea5e9").withAlpha(0.85),
       clampToGround: true
@@ -699,9 +700,10 @@ function drawStaticLayers() {
     id: "terrain-profile",
     name: "Sampled Cesium terrain profile",
     polyline: {
-      positions: terrainPositions.map((sample) => Cesium.Cartesian3.fromDegrees(sample.lon, sample.lat, sample.heightM + 90)),
+      positions: terrainPositions.map((sample) => Cesium.Cartesian3.fromDegrees(sample.lon, sample.lat)),
       width: 2,
-      material: Cesium.Color.fromCssColorString("#f8fafc").withAlpha(0.75)
+      material: Cesium.Color.fromCssColorString("#f8fafc").withAlpha(0.75),
+      clampToGround: true
     }
   });
   state.assetEntities = state.infrastructure.map((asset) => {
@@ -709,12 +711,13 @@ function drawStaticLayers() {
     return state.viewer.entities.add({
       id: asset.id,
       name: asset.name,
-      position: Cesium.Cartesian3.fromDegrees(asset.coordinates[0], asset.coordinates[1], 300),
+      position: Cesium.Cartesian3.fromDegrees(asset.coordinates[0], asset.coordinates[1]),
       point: {
         pixelSize: asset.kind === "settlement" ? 11 : 9,
         color: Cesium.Color.fromCssColorString(color),
         outlineColor: Cesium.Color.WHITE,
         outlineWidth: 1.5,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: Number.POSITIVE_INFINITY
       },
       label: {
@@ -725,6 +728,7 @@ function drawStaticLayers() {
         outlineWidth: 3,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
         pixelOffset: new Cesium.Cartesian2(0, -18),
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
         disableDepthTestDistance: Number.POSITIVE_INFINITY,
         scaleByDistance: new Cesium.NearFarScalar(25e3, 1, 18e4, 0.35)
       },
@@ -737,6 +741,7 @@ function drawStaticLayers() {
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   drawObservedEvidence();
   drawJourneyAnnotations(corridor);
+  window.NEPAL_FLOOD_CONFIG = { ...window.NEPAL_FLOOD_CONFIG, staticLayersReady: true };
 }
 function drawJourneyAnnotations(corridor) {
   if (!state.viewer || !window.Cesium || corridor.length < 2) return;
@@ -744,17 +749,17 @@ function drawJourneyAnnotations(corridor) {
   for (const [index, stage] of storyStages.entries()) {
     const progress = Math.min(corridor.length - 1, stage.progress);
     const [lon, lat] = offsetFromProgress(corridor, progress, index % 2 === 0 ? -520 : 520);
-    const height = nearestTerrainHeight(lon, lat) + 780;
     state.journeyEntities.push(
       state.viewer.entities.add({
         id: `journey-${stage.id}`,
         name: `${stage.label}: ${stage.title}`,
-        position: Cesium.Cartesian3.fromDegrees(lon, lat, height),
+        position: Cesium.Cartesian3.fromDegrees(lon, lat),
         point: {
           pixelSize: stage.id === "source" || stage.id === "end" ? 13 : 10,
           color: Cesium.Color.fromCssColorString(stage.id === "source" ? "#f97316" : stage.id === "end" ? "#0f172a" : "#fbbf24"),
           outlineColor: Cesium.Color.WHITE,
           outlineWidth: 2,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY
         },
         label: {
@@ -767,6 +772,7 @@ ${stage.time}`,
           outlineWidth: 4,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE,
           pixelOffset: new Cesium.Cartesian2(0, -34),
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(28e3, 1, 18e4, 0.28)
         },
@@ -798,11 +804,12 @@ function drawObservedEvidence() {
           id: `observed-${feature.properties.id}`,
           name: feature.properties.name,
           polygon: {
-            hierarchy: ring.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, 2400)),
+            hierarchy: ring.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat)),
             material: Cesium.Color.fromCssColorString(isPostEvent ? "#f59e0b" : "#22c55e").withAlpha(isPostEvent ? 0.12 : 0.08),
             outline: true,
             outlineColor: Cesium.Color.fromCssColorString(isPostEvent ? "#fbbf24" : "#86efac").withAlpha(0.9),
-            perPositionHeight: true
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            perPositionHeight: false
           },
           properties: feature.properties
         })
@@ -815,7 +822,7 @@ function drawObservedEvidence() {
           id: feature.properties.id,
           name: feature.properties.name,
           polyline: {
-            positions: line.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, 120)),
+            positions: line.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat)),
             width: 2,
             material: Cesium.Color.fromCssColorString("#38bdf8").withAlpha(0.72),
             clampToGround: true
@@ -830,12 +837,13 @@ function drawObservedEvidence() {
         state.viewer.entities.add({
           id: feature.properties.id,
           name: feature.properties.name,
-          position: Cesium.Cartesian3.fromDegrees(lon, lat, 460),
+          position: Cesium.Cartesian3.fromDegrees(lon, lat),
           point: {
             pixelSize: 7,
             color: Cesium.Color.fromCssColorString("#f8fafc"),
             outlineColor: Cesium.Color.fromCssColorString("#0f172a"),
             outlineWidth: 1,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
             disableDepthTestDistance: Number.POSITIVE_INFINITY
           },
           label: {
@@ -846,6 +854,7 @@ function drawObservedEvidence() {
             outlineWidth: 3,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
             pixelOffset: new Cesium.Cartesian2(0, -15),
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
             disableDepthTestDistance: Number.POSITIVE_INFINITY,
             scaleByDistance: new Cesium.NearFarScalar(22e3, 1, 15e4, 0.25)
           },
@@ -957,9 +966,10 @@ function drawInundationBand(Cesium, points, depthM, color, id) {
       id,
       name: `${state.currentRun?.scenario.name ?? "Scenario"} inundation ${id}`,
       polygon: {
-        hierarchy: normalized.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, nearestTerrainHeight(lon, lat) + Math.max(90, depthM * 14))),
+        hierarchy: normalized.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat)),
         material: color,
-        perPositionHeight: true,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        perPositionHeight: false,
         outline: false
       }
     })
@@ -1221,7 +1231,6 @@ function renderFrame() {
   for (const entity of state.flowEntities) state.viewer.entities.remove(entity);
   state.flowEntities = [];
   const visibleCenterline = frame.centerline.slice(0, Math.max(2, Math.ceil(state.time / 120 * frame.centerline.length)));
-  const terrainByIndex = state.terrainSamples.length ? state.terrainSamples : visibleCenterline.map(([lon, lat]) => ({ lon, lat, heightM: 0 }));
   if (state.layers.waterDepth || state.layers.hazard) {
     const shallow = terrainConstrainedFootprint(visibleCenterline, Math.max(45, frame.maxDepthM * 24), 420, Math.max(900, 1100 + frame.meanDepthM * 520));
     const moderate = terrainConstrainedFootprint(visibleCenterline, Math.max(24, frame.meanDepthM * 18), 260, Math.max(560, 700 + frame.meanDepthM * 300));
@@ -1242,11 +1251,12 @@ function renderFrame() {
         state.viewer.entities.add({
           polyline: {
             positions: [
-              Cesium.Cartesian3.fromDegrees(point[0], point[1], (terrainByIndex[index]?.heightM ?? 0) + 250),
-              Cesium.Cartesian3.fromDegrees(next[0], next[1], (terrainByIndex[index + 1]?.heightM ?? 0) + 250)
+              Cesium.Cartesian3.fromDegrees(point[0], point[1]),
+              Cesium.Cartesian3.fromDegrees(next[0], next[1])
             ],
             width: 2,
-            material: new Cesium.PolylineArrowMaterialProperty(Cesium.Color.fromCssColorString("#f8fafc").withAlpha(0.82))
+            material: new Cesium.PolylineArrowMaterialProperty(Cesium.Color.fromCssColorString("#f8fafc").withAlpha(0.82)),
+            clampToGround: true
           }
         })
       );
