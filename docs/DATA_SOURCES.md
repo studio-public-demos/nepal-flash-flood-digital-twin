@@ -48,10 +48,10 @@
 - Date: Catalog page lists pre-event and post-event imagery around the 26 August 2026 flood
 - Resolution: PlanetScope approximately 3.8 m, SkySat approximately 0.80 m, Pelican approximately 0.55 m, per the catalog README
 - License: CC-BY-NC-4.0, attribution required and non-commercial use only
-- Use: Real pre-event and post-event STAC scene footprints, acquisition timestamps, sensor metadata and provenance for the observed evidence layer
+- Use: Real pre-event and post-event STAC scene footprints, acquisition timestamps, sensor metadata and provenance for the source data and mapped geography layer
 - Processing: `observed-evidence.geojson` is generated from public STAC item geometries and metadata for the pre-event PlanetScope collection and post-event PlanetScope, SkySat and Pelican collections.
 - Redistribution limitations: Imagery pixels are not bundled. No Planet COGs, masks, thumbnails, or GeoParquet indexes are redistributed in this commercial-ready showcase
-- Confidence/limitations: Cloud cover and sensor/product differences require expert review; visual assets are reference-only here
+- Confidence/limitations: Scene footprints document acquisition coverage only. They are not interpreted as observed inundation boundaries or validation polygons in this public build.
 
 ## Associated Press Reporting
 
@@ -63,8 +63,8 @@
 ## Representative Simulation Dataset
 
 - Provider: Nebula Cloud Studio showcase generator
-- URL: local `scripts/data/generate-nepal-demo-data.mjs`
+- URL: local `scripts/data/refresh-canonical-scenarios.mjs`
 - License: Project-owned synthetic data
 - Use: Replay, What-If Lab, exposure and comparison
-- Processing: OpenStreetMap Bhote Koshi / Trishuli / lower Trishuli waterway geometries are stitched and resampled into a 150-point river centerline; flood envelopes propagate along that centerline and are constrained by runtime terrain cross-sections
-- Limitations: Synthetic representative output; not official warning data
+- Processing: The canonical runtime engine generates mass-balanced release hydrographs, scenario-specific arrival curves, compact flood envelopes, geometric point exposure, and polygon-area metrics over the OSM-derived corridor.
+- Limitations: Representative surrogate output; not official warning data and not calibrated 2D shallow-water solver output.

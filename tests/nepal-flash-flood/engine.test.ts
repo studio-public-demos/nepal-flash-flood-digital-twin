@@ -78,8 +78,8 @@ describe("Nepal flood simulation core", () => {
   });
 
   it("runs an estimated scenario through the precomputed engine", async () => {
-    const engine = new PrecomputedSimulationEngine([{ ...run, metrics: buildMetrics(run.frames, []) }], assets, provenance);
     const baseline = { ...scenario, scenarioType: "barrier_lake_what_if" as const, lakeVolumeMillionM3: 2, breachMechanism: "slow_overtopping" as const, rainfallMultiplier: 0.7, debrisPercent: 5 };
+    const engine = new PrecomputedSimulationEngine([{ ...run, scenario: baseline, metrics: buildMetrics(run.frames, []) }], assets, provenance);
     const output = await engine.runScenario({ ...baseline, id: "visitor", lakeVolumeMillionM3: 5, breachMechanism: "rapid_breach", rainfallMultiplier: 1.5, debrisPercent: 30 });
     expect(output.approximation).toBe(true);
     expect(output.assetExposure.length).toBe(2);

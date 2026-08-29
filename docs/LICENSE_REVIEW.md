@@ -1,6 +1,6 @@
 # License Review
 
-This production showcase does not bundle Geopera, Vantor, Planet, WorldView, PlanetScope, SkySat, Pelican, HEC-RAS, BASEMENT, NASA HMA DEM, Copernicus DEM, or HOT tasking-manager exports.
+This production showcase does not bundle Geopera, Vantor, Planet imagery pixels, WorldView imagery, PlanetScope imagery pixels, SkySat imagery pixels, Pelican imagery pixels, HEC-RAS, BASEMENT, NASA HMA DEM, Copernicus DEM, or HOT tasking-manager exports.
 
 ## Geopera / Vantor / Planet
 
@@ -10,7 +10,9 @@ Use in this showcase: cited context only, especially the separation between the 
 
 ## Planet Source Cooperative Disaster Data
 
-The Source Cooperative catalog at `https://source.coop/planet/disasterdata/nepal-flash-flood-2026-08-26` is public and documents PlanetScope, SkySat, and Pelican imagery as a STAC catalog, but it is licensed CC-BY-NC-4.0. Because that license is non-commercial, the showcase does not bundle or display the imagery, COGs, masks, thumbnails, STAC items, or GeoParquet indexes. It is included only as a cited reference and future data-ingestion candidate.
+The Source Cooperative catalog at `https://source.coop/planet/disasterdata/nepal-flash-flood-2026-08-26` is public and documents PlanetScope, SkySat, and Pelican imagery as a STAC catalog, but it is licensed CC-BY-NC-4.0. Because that license is non-commercial, the showcase does not bundle or display imagery pixels, COGs, masks, thumbnails, or GeoParquet indexes.
+
+The public build does include a small hand-curated acquisition-coverage GeoJSON derived from catalog metadata so users can see where cited scenes were collected. These footprints are classified as satellite acquisition coverage, not observed flood evidence, not derived flood masks, and not validation products.
 
 ## Cesium
 
@@ -18,7 +20,7 @@ The page can use CesiumJS from a CDN and Cesium World Terrain when a valid ion t
 
 ## OpenStreetMap / HOT
 
-Corridor place names are based on real geography and OpenStreetMap/HOT context. This demo ships a small representative GeoJSON with verified settlement names and representative bridge/facility identifiers rather than a full OSM extract. Any future bundled OSM extract must preserve ODbL attribution and share-alike requirements.
+Corridor place names are based on real geography and OpenStreetMap/HOT context where available. The current demo ships a small bounded GeoJSON with representative bridge/facility identifiers and lowered confidence for named settlements that are not yet backed by stored OSM feature IDs. Any future bundled OSM extract must preserve ODbL attribution and share-alike requirements.
 
 ## NASA / Copernicus / Nepal Sources
 

@@ -1,4 +1,5 @@
-import { compareRuns, frameAt, PrecomputedSimulationEngine, ShowcaseMissionProvider, validateScenario } from "./engine";
+import { buildArrivalCurve, compareRuns, frameAt, frontDistanceAt, PrecomputedSimulationEngine, ShowcaseMissionProvider, validateScenario } from "./engine";
+import { cumulativeKm } from "./geometry";
 import type { AssetExposure, InfrastructureAsset, SimulationRun, SimulationScenario } from "./domain";
 
 declare global {
@@ -837,10 +838,9 @@ function drawInundationBand(Cesium: any, points: number[][], depthM: number, col
       id,
       name: `${state.currentRun?.scenario.name ?? "Scenario"} inundation ${id}`,
       polygon: {
-        hierarchy: normalized.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat)),
+        hierarchy: normalized.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, nearestTerrainHeight(lon, lat) + Math.max(0.2, depthM))),
         material: color,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        perPositionHeight: false,
+        perPositionHeight: true,
         outline: false,
       },
     }),
@@ -935,6 +935,10 @@ function projectToCanvas(Cesium: any, lon: number, lat: number, heightM: number)
   return projected as { x: number; y: number };
 }
 
+function visualWaterSurfaceHeight(lon: number, lat: number, frame: ReturnType<typeof frameAt>, offsetM = 0.7) {
+  return nearestTerrainHeight(lon, lat) + Math.max(0.2, frame.meanDepthM) + offsetM;
+}
+
 function drawFlowCrests(ctx: CanvasRenderingContext2D, Cesium: any, centerline: number[][], frame: ReturnType<typeof frameAt>, nowSeconds: number) {
   const { back, front } = visibleFlowWindow(centerline);
   let drawn = 0;
@@ -942,7 +946,7 @@ function drawFlowCrests(ctx: CanvasRenderingContext2D, Cesium: any, centerline: 
     const halfWidth = flowHalfWidthAt(frame, progress);
     const left = offsetFromProgress(centerline, progress, -halfWidth * 0.78);
     const right = offsetFromProgress(centerline, progress, halfWidth * 0.78);
-    const height = nearestTerrainHeight((left[0] + right[0]) / 2, (left[1] + right[1]) / 2) + 150;
+    const height = visualWaterSurfaceHeight((left[0] + right[0]) / 2, (left[1] + right[1]) / 2, frame, 0.9);
     const a = projectToCanvas(Cesium, left[0], left[1], height);
     const b = projectToCanvas(Cesium, right[0], right[1], height);
     if (!a || !b) continue;
@@ -965,7 +969,7 @@ function drawSurgeFront(ctx: CanvasRenderingContext2D, Cesium: any, centerline: 
   for (const lane of [-0.95, -0.62, -0.28, 0, 0.28, 0.62, 0.95]) {
     const jitter = Math.sin(nowSeconds * 5 + lane * 9) * halfWidth * 0.04;
     const [lon, lat] = offsetFromProgress(centerline, front, lane * halfWidth + jitter);
-    const projected = projectToCanvas(Cesium, lon, lat, nearestTerrainHeight(lon, lat) + 190 + frame.maxDepthM * 10);
+    const projected = projectToCanvas(Cesium, lon, lat, visualWaterSurfaceHeight(lon, lat, frame, 1.2));
     if (projected) points.push(projected);
   }
   if (points.length < 2) return 0;
@@ -1062,7 +1066,7 @@ function drawFluidOverlay(nowMs: number) {
     const laneOffsetM = particle.lane * halfWidth * (0.42 + 0.11 * pulse);
     const head = offsetFromProgress(centerline, particle.progress, laneOffsetM);
     const tail = offsetFromProgress(centerline, Math.max(0, particle.progress - 0.44 - frame.velocityMS * 0.035), laneOffsetM * 0.92);
-    const height = nearestTerrainHeight(head[0], head[1]) + 170 + frame.meanDepthM * 10;
+    const height = visualWaterSurfaceHeight(head[0], head[1], frame, particle.debris ? 0.55 : 0.8);
     const a = projectToCanvas(Cesium, tail[0], tail[1], height);
     const b = projectToCanvas(Cesium, head[0], head[1], height);
     if (!a || !b) continue;
@@ -1121,7 +1125,11 @@ function renderFrame() {
   state.waterEntities = [];
   for (const entity of state.flowEntities) state.viewer.entities.remove(entity);
   state.flowEntities = [];
-  const visibleCenterline = frame.centerline.slice(0, Math.max(2, Math.ceil((state.time / 120) * frame.centerline.length)));
+  const arrivalCurve = frame.arrivalTimeByKm?.length ? frame.arrivalTimeByKm : buildArrivalCurve(run.scenario, frame.centerline);
+  const frontDistanceKm = frame.frontDistanceKm ?? frontDistanceAt(arrivalCurve, state.time);
+  const distances = cumulativeKm(frame.centerline);
+  const visibleCount = Math.max(2, distances.findIndex((distance) => distance >= frontDistanceKm));
+  const visibleCenterline = frame.centerline.slice(0, visibleCount > 1 ? visibleCount : 2);
   if (state.layers.waterDepth || state.layers.hazard) {
     const shallow = terrainConstrainedFootprint(visibleCenterline, Math.max(45, frame.maxDepthM * 24), 420, Math.max(900, 1100 + frame.meanDepthM * 520));
     const moderate = terrainConstrainedFootprint(visibleCenterline, Math.max(24, frame.meanDepthM * 18), 260, Math.max(560, 700 + frame.meanDepthM * 300));
@@ -1174,14 +1182,14 @@ function renderMetrics() {
   $("#scenarioName").textContent = run.scenario.name;
   $("#classification").textContent =
     run.scenario.scenarioType === "reference_event"
-      ? `reference reconstruction, ~${run.scenario.referenceReleaseMillionM3 ?? 100} Mm3`
+      ? `representative event replay, ~${run.scenario.referenceReleaseMillionM3 ?? 100} Mm3`
       : run.approximation
         ? "interactive scenario approximation"
         : "precomputed scenario model";
   $("#frameStats").innerHTML = `
     <div><strong>${frame.maxDepthM.toFixed(1)}</strong><span>max depth m</span></div>
     <div><strong>${frame.velocityMS.toFixed(1)}</strong><span>velocity m/s</span></div>
-    <div><strong>${frame.hazardIndex.toFixed(1)}</strong><span>h x v index</span></div>
+    <div><strong>${frame.hazardIndex.toFixed(1)}</strong><span>hydraulic hazard proxy</span></div>
     <div><strong>${terrainSampleCount()}</strong><span>terrain samples</span></div>
   `;
   $("#metrics").innerHTML = run.metrics
@@ -1201,7 +1209,7 @@ function renderObservedEvidencePanel() {
   const downstreamMetric = state.currentRun?.metrics.find((metric) => metric.id === "downstream");
   const sensors = [...new Set(scenes.map((feature) => feature.properties.sensor).filter(Boolean))].join(", ");
   $("#observedEvidence").innerHTML = `
-    <div class="evidence-head"><span>Observed evidence</span><strong>Real catalog + OSM layers</strong></div>
+    <div class="evidence-head"><span>Source data & mapped geography</span><strong>Catalog coverage + OSM layers</strong></div>
     <div class="evidence-grid">
       <div><strong>${postScenes.length}</strong><span>post-event satellite scenes</span></div>
       <div><strong>${communities.length}</strong><span>OSM communities near corridor</span></div>
@@ -1210,7 +1218,7 @@ function renderObservedEvidencePanel() {
       <div><strong>${downstreamTributaries.length}</strong><span>downstream tributaries</span></div>
       <div><strong>${downstreamMetric?.value ?? 0}</strong><span>modeled downstream assets</span></div>
     </div>
-    <p>Shown on the map: Planet scene footprints/times, mapped communities, tributaries, and lower Trishuli continuation. Downstream water depth/overflow remains representative until observed inundation polygons or hydraulic rasters are integrated.</p>
+    <p>Shown on the map: satellite acquisition footprints/times, mapped communities, tributaries, and lower Trishuli continuation. These footprints are source coverage, not observed flood polygons. Downstream water depth/overflow remains representative until observed inundation polygons or hydraulic rasters are integrated.</p>
     <a href="https://source.coop/planet/disasterdata/nepal-flash-flood-2026-08-26" target="_blank" rel="noreferrer">Planet/Source Cooperative STAC catalog</a>
     <em>${sensors ? `Sensors: ${sensors}` : "Sensor metadata pending"}</em>
   `;

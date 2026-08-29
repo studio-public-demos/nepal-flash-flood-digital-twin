@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { buildMetrics, calculateAssetExposure, compareRuns, frameAt, scenarioIntensity, TIMELINE, validateScenario } from "../../src/nepal-flash-flood/engine";
+import { buildReleaseHydrograph, buildMetrics, calculateAssetExposure, compareRuns, frameAt, scenarioIntensity, TIMELINE, validateScenario } from "../../src/nepal-flash-flood/engine";
 import { hazardIndex } from "../../src/nepal-flash-flood/hazard";
 import type { InfrastructureAsset, SimulationRun } from "../../src/nepal-flash-flood/domain";
 
@@ -45,6 +45,27 @@ describe("bundled Nepal flood scenario data", () => {
         expect(item.scenario.debrisPercent, item.id).toBeLessThanOrEqual(50);
       }
     }
+  });
+
+  it("stores mass-balanced hydrographs and scenario-specific arrival curves", () => {
+    const curves = new Map<string, string>();
+    for (const item of scenarioData.runs) {
+      expect(item.releaseHydrograph?.length, item.id).toBeGreaterThan(10);
+      expect(item.releasedVolumeM3, item.id).toBeGreaterThan(0);
+      expect(Math.abs(item.hydrographMassErrorPercent ?? 999), item.id).toBeLessThan(0.01);
+      expect(item.releaseHydrograph?.every((point) => point.dischargeCMS >= 0), item.id).toBe(true);
+      const regenerated = buildReleaseHydrograph(item.scenario);
+      expect(Math.max(...(item.releaseHydrograph ?? []).map((point) => point.dischargeCMS)), item.id).toBeCloseTo(
+        Math.max(...regenerated.hydrograph.map((point) => point.dischargeCMS)),
+        1,
+      );
+      const firstFrame = item.frames[0];
+      expect(firstFrame?.arrivalTimeByKm?.length, item.id).toBeGreaterThan(20);
+      curves.set(item.id, JSON.stringify(item.frames.map((frame) => frame.frontDistanceKm)));
+    }
+    expect(curves.get("S1")).not.toEqual(curves.get("S3"));
+    expect(curves.get("S3")).not.toEqual(curves.get("S4"));
+    expect(curves.get("S3")).not.toEqual(curves.get("S7"));
   });
 
   it("uses a complete monotonic replay timeline with physically bounded frame values", () => {
@@ -110,5 +131,8 @@ describe("bundled Nepal flood scenario data", () => {
     expect(metric(s6, "bridges")).toBeGreaterThanOrEqual(metric(s3, "bridges") ?? 0);
     expect(compareRuns(s1, s4).extentDeltaHa).toBeGreaterThan(0);
     expect(compareRuns(s3, s7).classification).toBe("simulated");
+    const s7Discharges = s7.releaseHydrograph?.map((point) => point.dischargeCMS) ?? [];
+    const localPeaks = s7Discharges.filter((value, index) => value > (s7Discharges[index - 1] ?? 0) && value > (s7Discharges[index + 1] ?? 0));
+    expect(localPeaks.length).toBeGreaterThanOrEqual(2);
   });
 });

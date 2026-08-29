@@ -34,8 +34,10 @@
           28.2381
         ],
         "corridorKm": 4.4,
-        "officialNameVerified": true,
-        "classification": "observed"
+        "officialNameVerified": false,
+        "classification": "representative",
+        "source": "Representative demo coordinate pending OSM/HOT traceability",
+        "confidence": "low"
       },
       "geometry": {
         "type": "Point",
@@ -56,8 +58,10 @@
           28.2006
         ],
         "corridorKm": 11.3,
-        "officialNameVerified": true,
-        "classification": "observed"
+        "officialNameVerified": false,
+        "classification": "representative",
+        "source": "Representative demo coordinate pending OSM/HOT traceability",
+        "confidence": "low"
       },
       "geometry": {
         "type": "Point",
@@ -100,8 +104,10 @@
           28.1046
         ],
         "corridorKm": 21.2,
-        "officialNameVerified": true,
-        "classification": "observed"
+        "officialNameVerified": false,
+        "classification": "representative",
+        "source": "Representative demo coordinate pending OSM/HOT traceability",
+        "confidence": "low"
       },
       "geometry": {
         "type": "Point",
@@ -166,8 +172,10 @@
           27.9524
         ],
         "corridorKm": 44.6,
-        "officialNameVerified": true,
-        "classification": "observed"
+        "officialNameVerified": false,
+        "classification": "representative",
+        "source": "Representative demo coordinate pending OSM/HOT traceability",
+        "confidence": "low"
       },
       "geometry": {
         "type": "Point",
@@ -232,8 +240,10 @@
           27.8228
         ],
         "corridorKm": 68.7,
-        "officialNameVerified": true,
-        "classification": "observed"
+        "officialNameVerified": false,
+        "classification": "representative",
+        "source": "Representative demo coordinate pending OSM/HOT traceability",
+        "confidence": "low"
       },
       "geometry": {
         "type": "Point",
@@ -254,8 +264,10 @@
           27.8105
         ],
         "corridorKm": 87.3,
-        "officialNameVerified": true,
-        "classification": "observed"
+        "officialNameVerified": false,
+        "classification": "representative",
+        "source": "Representative demo coordinate pending OSM/HOT traceability",
+        "confidence": "low"
       },
       "geometry": {
         "type": "Point",

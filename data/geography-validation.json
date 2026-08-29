@@ -1,0 +1,15 @@
+{
+  "generatedAt": "2026-08-29T18:34:02.836Z",
+  "status": "WARN",
+  "checkedFeatureCount": 234,
+  "results": [
+    {
+      "status": "WARN",
+      "severity": "P1",
+      "label": "Named place is not yet backed by an OSM feature in the production dataset",
+      "details": {
+        "name": "Devighat"
+      }
+    }
+  ]
+}

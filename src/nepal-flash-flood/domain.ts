@@ -71,11 +71,18 @@ export interface SimulationFrame {
   timeMinutes: number;
   footprint: number[][];
   centerline: number[][];
+  frontDistanceKm?: number;
+  arrivalTimeByKm?: Array<[number, number]>;
   meanDepthM: number;
   maxDepthM: number;
   velocityMS: number;
   hazardIndex: number;
   classification: DataClassification;
+}
+
+export interface ReleaseHydrographPoint {
+  timeMinutes: number;
+  dischargeCMS: number;
 }
 
 export interface SimulationMetric {
@@ -123,6 +130,9 @@ export interface SettlementExposure extends AssetExposure {
 export interface SimulationRun {
   id: string;
   scenario: SimulationScenario;
+  releaseHydrograph?: ReleaseHydrographPoint[];
+  releasedVolumeM3?: number;
+  hydrographMassErrorPercent?: number;
   frames: SimulationFrame[];
   metrics: SimulationMetric[];
   rasterMetadata: FloodRasterMetadata;

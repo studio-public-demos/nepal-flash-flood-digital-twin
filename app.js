@@ -16,6 +16,61 @@ function classifyExposure(depthM, hazard) {
   return "high";
 }
 
+// src/nepal-flash-flood/geometry.ts
+var EARTH_RADIUS_M = 63710088e-1;
+function distanceKm(a, b) {
+  const toRad = (value) => value * Math.PI / 180;
+  const dLat = toRad((b[1] ?? 0) - (a[1] ?? 0));
+  const dLon = toRad((b[0] ?? 0) - (a[0] ?? 0));
+  const lat1 = toRad(a[1] ?? 0);
+  const lat2 = toRad(b[1] ?? 0);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h))) / 1e3;
+}
+function referenceLatRad(points) {
+  const lat = points.reduce((sum, point) => sum + (point[1] ?? 0), 0) / Math.max(1, points.length);
+  return lat * Math.PI / 180;
+}
+function project(point, lat0) {
+  const lon = (point[0] ?? 0) * Math.PI / 180;
+  const lat = (point[1] ?? 0) * Math.PI / 180;
+  return [EARTH_RADIUS_M * lon * Math.cos(lat0), EARTH_RADIUS_M * lat];
+}
+function polygonAreaHa(ring) {
+  if (ring.length < 3) return 0;
+  const closed = ring[0]?.[0] === ring.at(-1)?.[0] && ring[0]?.[1] === ring.at(-1)?.[1] ? ring : [...ring, ring[0] ?? [0, 0]];
+  const lat0 = referenceLatRad(closed);
+  let sum = 0;
+  for (let index = 0; index < closed.length - 1; index += 1) {
+    const [x1, y1] = project(closed[index] ?? [0, 0], lat0);
+    const [x2, y2] = project(closed[index + 1] ?? [0, 0], lat0);
+    sum += x1 * y2 - x2 * y1;
+  }
+  return Number((Math.abs(sum) / 2 / 1e4).toFixed(2));
+}
+function pointInPolygon(point, polygon) {
+  if (polygon.length < 3) return false;
+  const x = point[0] ?? 0;
+  const y = point[1] ?? 0;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const xi = polygon[i]?.[0] ?? 0;
+    const yi = polygon[i]?.[1] ?? 0;
+    const xj = polygon[j]?.[0] ?? 0;
+    const yj = polygon[j]?.[1] ?? 0;
+    const intersects = yi > y !== yj > y && x < (xj - xi) * (y - yi) / Math.max(1e-12, yj - yi) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+function cumulativeKm(line) {
+  const distances = [0];
+  for (let index = 1; index < line.length; index += 1) {
+    distances.push((distances.at(-1) ?? 0) + distanceKm(line[index - 1] ?? [0, 0], line[index] ?? [0, 0]));
+  }
+  return distances.map((value) => Number(value.toFixed(3)));
+}
+
 // src/nepal-flash-flood/engine.ts
 function validateScenario(scenario) {
   const errors = [];
@@ -50,24 +105,90 @@ function mechanismFactor(mechanism) {
 function enumFactor(value, values) {
   return values[value] ?? 1;
 }
+function releasedVolumeM3(scenario) {
+  const millionM3 = scenario.scenarioType === "reference_event" ? scenario.referenceReleaseMillionM3 ?? 100 : scenario.lakeVolumeMillionM3;
+  return millionM3 * 1e6;
+}
+function hydrographShape(scenario, timeMinutes) {
+  const duration = Math.max(10, scenario.breachDurationMinutes);
+  const mechanismPeak = enumFactor(scenario.breachMechanism, {
+    slow_overtopping: 0.58,
+    partial_breach: 0.78,
+    rapid_breach: 1,
+    catastrophic_breach: 1.24
+  });
+  const width = enumFactor(scenario.relativeBreachWidth, { small: 0.72, medium: 1, large: 1.18, extreme: 1.36 });
+  const pulse = (start, span, scale) => {
+    const local = (timeMinutes - start) / span;
+    if (local < 0 || local > 1) return 0;
+    return Math.sin(local * Math.PI) ** 1.35 * scale;
+  };
+  if (scenario.secondaryBlockage) {
+    return pulse(0, duration * 0.62, mechanismPeak * width * 0.62) + pulse(duration * 0.62 + 22, duration * 0.78, mechanismPeak * width * 0.38);
+  }
+  return pulse(0, duration, mechanismPeak * width);
+}
+function buildReleaseHydrograph(scenario, stepMinutes = 5) {
+  const targetVolume = releasedVolumeM3(scenario);
+  const endMinutes = Math.max(180, scenario.breachDurationMinutes * (scenario.secondaryBlockage ? 2.2 : 1.45) + 55);
+  const times = [];
+  for (let time = 0; time <= endMinutes; time += stepMinutes) times.push(Number(time.toFixed(3)));
+  const weights = times.map((time) => hydrographShape(scenario, time));
+  let weightIntegralSeconds = 0;
+  for (let index = 1; index < weights.length; index += 1) {
+    weightIntegralSeconds += ((weights[index - 1] ?? 0) + (weights[index] ?? 0)) / 2 * stepMinutes * 60;
+  }
+  const rainfallFactor = 1 + Math.max(0, scenario.rainfallMultiplier - 1) * 0.08;
+  const effectiveVolume = targetVolume * rainfallFactor;
+  const scale = weightIntegralSeconds > 0 ? effectiveVolume / weightIntegralSeconds : 0;
+  const hydrograph = times.map((time, index) => ({
+    timeMinutes: time,
+    dischargeCMS: Number(((weights[index] ?? 0) * scale).toFixed(2))
+  }));
+  let integrated = 0;
+  for (let index = 1; index < hydrograph.length; index += 1) {
+    const previous = hydrograph[index - 1] ?? { dischargeCMS: 0 };
+    const current = hydrograph[index] ?? { dischargeCMS: 0 };
+    integrated += (previous.dischargeCMS + current.dischargeCMS) / 2 * stepMinutes * 60;
+  }
+  return {
+    hydrograph,
+    releasedVolumeM3: targetVolume,
+    massErrorPercent: Number(((integrated - effectiveVolume) / Math.max(1, effectiveVolume) * 100).toFixed(3))
+  };
+}
 function scenarioIntensity(scenario) {
   if (scenario.scenarioType === "reference_event") {
     const referenceVolume = scenario.referenceReleaseMillionM3 ?? 100;
     return Number((3.85 * (referenceVolume / 100)).toFixed(3));
   }
+  const hydrograph = buildReleaseHydrograph(scenario).hydrograph;
+  const peakQ = Math.max(...hydrograph.map((point) => point.dischargeCMS), 1);
   const volume = 0.75 + (scenario.lakeVolumeMillionM3 - 2) / 3;
   const rainfall = 0.85 + scenario.rainfallMultiplier * 0.16;
   const flow = enumFactor(scenario.antecedentFlow, { low: 0.86, normal: 1, high: 1.16, extreme: 1.34 });
   const debris = 1 + scenario.debrisPercent / 140;
-  const width = enumFactor(scenario.relativeBreachWidth, { small: 0.88, medium: 1, large: 1.14, extreme: 1.28 });
   const roughness = enumFactor(scenario.channelRoughness, { low: 1.08, normal: 1, high: 0.9 });
-  const obstruction = enumFactor(scenario.bridgeCondition, {
-    existing: 1,
-    partially_blocked: 1.09,
-    fully_blocked: 1.18,
-    failed_open_channel: 0.96
-  });
-  return Number((volume * mechanismFactor(scenario.breachMechanism) * rainfall * flow * debris * width * roughness * obstruction * (scenario.secondaryBlockage ? 1.08 : 1)).toFixed(3));
+  const hydrographPeak = Math.sqrt(peakQ / 460);
+  return Number((volume * mechanismFactor(scenario.breachMechanism) * rainfall * flow * debris * roughness * hydrographPeak).toFixed(3));
+}
+function buildArrivalCurve(scenario, centerline) {
+  const distances = cumulativeKm(centerline);
+  const hydrograph = buildReleaseHydrograph(scenario).hydrograph;
+  const peakQ = Math.max(...hydrograph.map((point) => point.dischargeCMS), 1);
+  const firstPulseTime = hydrograph.find((point) => point.dischargeCMS >= peakQ * 0.12)?.timeMinutes ?? 0;
+  const roughness = enumFactor(scenario.channelRoughness, { low: 1.12, normal: 1, high: 0.86 });
+  const debris = 1 - Math.min(0.18, scenario.debrisPercent / 320);
+  const mechanism = enumFactor(scenario.breachMechanism, { slow_overtopping: 0.74, partial_breach: 0.92, rapid_breach: 1.08, catastrophic_breach: 1.18 });
+  const celerityKmPerMin = Math.max(0.55, Math.min(2.25, (0.42 + Math.sqrt(peakQ) / 62) * roughness * debris * mechanism));
+  return distances.map((distance) => [Number(distance.toFixed(3)), Number((firstPulseTime + distance / celerityKmPerMin).toFixed(2))]);
+}
+function frontDistanceAt(arrivalCurve, timeMinutes) {
+  let front = 0;
+  for (const [distance, arrival] of arrivalCurve) {
+    if (arrival <= timeMinutes) front = distance;
+  }
+  return Number(front.toFixed(3));
 }
 function interpolateFrame(a, b, timeMinutes) {
   if (a.timeMinutes === b.timeMinutes) return a;
@@ -99,21 +220,30 @@ function frameAt(run, timeMinutes) {
   return interpolateFrame(before, after, timeMinutes);
 }
 function calculateAssetExposure(run, assets) {
-  const intensity = scenarioIntensity(run.scenario);
+  const firstFrame = run.frames[0];
+  if (!firstFrame) return [];
+  const wettestFrame = run.frames.reduce((best, frame) => polygonAreaHa(frame.footprint) > polygonAreaHa(best.footprint) ? frame : best, firstFrame);
+  const arrivalCurve = run.frames.find((frame) => frame.arrivalTimeByKm?.length)?.arrivalTimeByKm ?? buildArrivalCurve(run.scenario, wettestFrame.centerline);
   return assets.map((asset) => {
-    const arrival = Math.max(8, Math.round(asset.corridorKm * (1.6 - Math.min(0.7, intensity / 5))));
-    const reachFactor = Math.max(0, Math.min(1.5, intensity - asset.corridorKm / 165 + (asset.kind === "bridge" ? 0.12 : 0)));
-    const depth = Number(Math.max(0, reachFactor * 2.15 + (asset.kind === "settlement" ? -0.28 : 0.15)).toFixed(1));
-    const velocity = Number(Math.max(0, run.frames.reduce((m, f) => Math.max(m, f.velocityMS), 0) * (0.72 + reachFactor / 4)).toFixed(1));
+    const wet = pointInPolygon(asset.coordinates, wettestFrame.footprint);
+    const initialArrival = arrivalCurve[0] ?? [0, null];
+    const localArrival = arrivalCurve.reduce(
+      (best, [distance, arrival]) => Math.abs(distance - asset.corridorKm) < Math.abs(best[0] - asset.corridorKm) ? [distance, arrival] : best,
+      initialArrival
+    )[1];
+    const localBridgeBackwater = asset.kind === "bridge" && run.scenario.bridgeCondition !== "existing" ? enumFactor(run.scenario.bridgeCondition, { partially_blocked: 0.22, fully_blocked: 0.42, failed_open_channel: -0.08 }) : 0;
+    const timeFactor = wet ? Math.max(0.15, 1 - asset.corridorKm / 210) : 0;
+    const depth = Number((wet ? Math.max(0.08, wettestFrame.maxDepthM * (0.35 + timeFactor * 0.45) + localBridgeBackwater) : 0).toFixed(2));
+    const velocity = Number((wet ? Math.max(0.05, wettestFrame.velocityMS * (0.42 + timeFactor * 0.32)) : 0).toFixed(2));
     const hazard = classifyHazard(hazardIndex(depth, velocity));
     return {
       assetId: asset.id,
-      arrivalTimeMinutes: depth > 0.05 ? arrival : null,
+      arrivalTimeMinutes: depth > 0.05 && localArrival !== null ? Number(localArrival.toFixed(1)) : null,
       maxModeledDepthM: depth,
       maxModeledVelocityMS: velocity,
       hazard,
       exposure: classifyExposure(depth, hazard),
-      confidence: asset.classification === "observed" ? "medium" : "low",
+      confidence: run.approximation ? "low" : asset.classification === "observed" ? "medium" : "low",
       classification: run.approximation ? "estimated" : "simulated"
     };
   });
@@ -130,7 +260,8 @@ var PrecomputedSimulationEngine = class {
     const exact = this.anchorRuns.find((run2) => run2.scenario.id === input.id);
     if (exact) return { ...exact, assetExposure: calculateAssetExposure(exact, this.assets) };
     const target = scenarioIntensity(input);
-    const anchors = [...this.anchorRuns].sort(
+    const compatibleRuns = this.anchorRuns.filter((run2) => run2.scenario.scenarioType === "barrier_lake_what_if");
+    const anchors = [...compatibleRuns].sort(
       (a2, b2) => Math.abs(scenarioIntensity(a2.scenario) - target) - Math.abs(scenarioIntensity(b2.scenario) - target)
     );
     if (!anchors[0]) throw new Error("No precomputed scenario anchors are available.");
@@ -140,6 +271,7 @@ var PrecomputedSimulationEngine = class {
     const span = Math.max(1e-3, Math.abs(bScore - aScore));
     const weight = Math.max(0, Math.min(1, Math.abs(target - aScore) / span));
     const mix = (x, y) => Number((x + (y - x) * weight).toFixed(3));
+    const arrivalTimeByKm = buildArrivalCurve(input, a.frames[0]?.centerline ?? []);
     const frames = a.frames.map((frame, index) => {
       const other = b.frames[index] ?? frame;
       const scale = Math.max(0.62, Math.min(1.65, target / Math.max(0.1, aScore)));
@@ -159,12 +291,18 @@ var PrecomputedSimulationEngine = class {
         maxDepthM: Number((mix(frame.maxDepthM, other.maxDepthM) * scale).toFixed(2)),
         velocityMS: Number((mix(frame.velocityMS, other.velocityMS) * Math.sqrt(scale)).toFixed(2)),
         hazardIndex: hazardIndex(mix(frame.maxDepthM, other.maxDepthM) * scale, mix(frame.velocityMS, other.velocityMS) * Math.sqrt(scale)),
+        frontDistanceKm: frontDistanceAt(arrivalTimeByKm, frame.timeMinutes),
+        arrivalTimeByKm,
         classification: "estimated"
       };
     });
+    const hydrograph = buildReleaseHydrograph(input);
     const run = {
       id: `approx-${Date.now()}`,
       scenario: input,
+      releaseHydrograph: hydrograph.hydrograph,
+      releasedVolumeM3: hydrograph.releasedVolumeM3,
+      hydrographMassErrorPercent: hydrograph.massErrorPercent,
       frames,
       metrics: buildMetrics(frames, []),
       rasterMetadata: {
@@ -194,12 +332,12 @@ var PrecomputedSimulationEngine = class {
 };
 function buildMetrics(frames, exposure) {
   if (!frames[0]) throw new Error("Cannot build metrics without simulation frames.");
-  const maxFrame = frames.reduce((best, frame) => frame.maxDepthM > best.maxDepthM ? frame : best, frames[0]);
+  const maxFrame = frames.reduce((best, frame) => polygonAreaHa(frame.footprint) > polygonAreaHa(best.footprint) ? frame : best, frames[0]);
   const exposed = exposure.filter((x) => x.exposure !== "none");
   const bridgeExposure = exposed.filter((x) => x.assetId.includes("bridge")).length;
   const settlementExposure = exposed.filter((x) => x.assetId.includes("settlement")).length;
   return [
-    { id: "extent", label: "Modeled inundated area", value: Number((maxFrame.footprint.length * maxFrame.meanDepthM * 0.42).toFixed(1)), unit: "ha", classification: "estimated" },
+    { id: "extent", label: "Modeled inundated area", value: polygonAreaHa(maxFrame.footprint), unit: "ha", classification: "estimated" },
     { id: "depth", label: "Maximum modeled depth", value: maxFrame.maxDepthM, unit: "m", classification: "estimated" },
     { id: "velocity", label: "Maximum modeled velocity", value: maxFrame.velocityMS, unit: "m/s", classification: "estimated" },
     { id: "roads", label: "Road length exposed", value: Number((exposed.length * 1.35).toFixed(1)), unit: "km", classification: "estimated" },
@@ -229,11 +367,11 @@ var ShowcaseMissionProvider = class {
       "Validate scenario",
       "Load scenario envelope",
       "Resolve terrain context",
-      "Generate release hydrograph",
+      "Generate release hydrograph Q(t)",
       "Select anchor models",
       "Compute scenario approximation",
       "Validate numerical bounds",
-      "Compute infrastructure exposure",
+      "Compute geometric infrastructure exposure",
       "Generate timeline frames",
       "Update 3D digital twin",
       "Generate scenario summary"
@@ -966,10 +1104,9 @@ function drawInundationBand(Cesium, points, depthM, color, id) {
       id,
       name: `${state.currentRun?.scenario.name ?? "Scenario"} inundation ${id}`,
       polygon: {
-        hierarchy: normalized.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat)),
+        hierarchy: normalized.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, nearestTerrainHeight(lon, lat) + Math.max(0.2, depthM))),
         material: color,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        perPositionHeight: false,
+        perPositionHeight: true,
         outline: false
       }
     })
@@ -1054,6 +1191,9 @@ function projectToCanvas(Cesium, lon, lat, heightM) {
   if (!projected || !Number.isFinite(projected.x) || !Number.isFinite(projected.y)) return null;
   return projected;
 }
+function visualWaterSurfaceHeight(lon, lat, frame, offsetM = 0.7) {
+  return nearestTerrainHeight(lon, lat) + Math.max(0.2, frame.meanDepthM) + offsetM;
+}
 function drawFlowCrests(ctx, Cesium, centerline, frame, nowSeconds) {
   const { back, front } = visibleFlowWindow(centerline);
   let drawn = 0;
@@ -1061,7 +1201,7 @@ function drawFlowCrests(ctx, Cesium, centerline, frame, nowSeconds) {
     const halfWidth = flowHalfWidthAt(frame, progress);
     const left = offsetFromProgress(centerline, progress, -halfWidth * 0.78);
     const right = offsetFromProgress(centerline, progress, halfWidth * 0.78);
-    const height = nearestTerrainHeight((left[0] + right[0]) / 2, (left[1] + right[1]) / 2) + 150;
+    const height = visualWaterSurfaceHeight((left[0] + right[0]) / 2, (left[1] + right[1]) / 2, frame, 0.9);
     const a = projectToCanvas(Cesium, left[0], left[1], height);
     const b = projectToCanvas(Cesium, right[0], right[1], height);
     if (!a || !b) continue;
@@ -1083,7 +1223,7 @@ function drawSurgeFront(ctx, Cesium, centerline, frame, nowSeconds) {
   for (const lane of [-0.95, -0.62, -0.28, 0, 0.28, 0.62, 0.95]) {
     const jitter = Math.sin(nowSeconds * 5 + lane * 9) * halfWidth * 0.04;
     const [lon, lat] = offsetFromProgress(centerline, front, lane * halfWidth + jitter);
-    const projected = projectToCanvas(Cesium, lon, lat, nearestTerrainHeight(lon, lat) + 190 + frame.maxDepthM * 10);
+    const projected = projectToCanvas(Cesium, lon, lat, visualWaterSurfaceHeight(lon, lat, frame, 1.2));
     if (projected) points.push(projected);
   }
   if (points.length < 2) return 0;
@@ -1172,7 +1312,7 @@ function drawFluidOverlay(nowMs) {
     const laneOffsetM = particle.lane * halfWidth * (0.42 + 0.11 * pulse);
     const head = offsetFromProgress(centerline, particle.progress, laneOffsetM);
     const tail = offsetFromProgress(centerline, Math.max(0, particle.progress - 0.44 - frame.velocityMS * 0.035), laneOffsetM * 0.92);
-    const height = nearestTerrainHeight(head[0], head[1]) + 170 + frame.meanDepthM * 10;
+    const height = visualWaterSurfaceHeight(head[0], head[1], frame, particle.debris ? 0.55 : 0.8);
     const a = projectToCanvas(Cesium, tail[0], tail[1], height);
     const b = projectToCanvas(Cesium, head[0], head[1], height);
     if (!a || !b) continue;
@@ -1230,7 +1370,11 @@ function renderFrame() {
   state.waterEntities = [];
   for (const entity of state.flowEntities) state.viewer.entities.remove(entity);
   state.flowEntities = [];
-  const visibleCenterline = frame.centerline.slice(0, Math.max(2, Math.ceil(state.time / 120 * frame.centerline.length)));
+  const arrivalCurve = frame.arrivalTimeByKm?.length ? frame.arrivalTimeByKm : buildArrivalCurve(run.scenario, frame.centerline);
+  const frontDistanceKm = frame.frontDistanceKm ?? frontDistanceAt(arrivalCurve, state.time);
+  const distances = cumulativeKm(frame.centerline);
+  const visibleCount = Math.max(2, distances.findIndex((distance) => distance >= frontDistanceKm));
+  const visibleCenterline = frame.centerline.slice(0, visibleCount > 1 ? visibleCount : 2);
   if (state.layers.waterDepth || state.layers.hazard) {
     const shallow = terrainConstrainedFootprint(visibleCenterline, Math.max(45, frame.maxDepthM * 24), 420, Math.max(900, 1100 + frame.meanDepthM * 520));
     const moderate = terrainConstrainedFootprint(visibleCenterline, Math.max(24, frame.meanDepthM * 18), 260, Math.max(560, 700 + frame.meanDepthM * 300));
@@ -1279,11 +1423,11 @@ function renderMetrics() {
   updateSurgeNarrative(frame.centerline);
   $("#timeLabel").textContent = `T+${state.time}`;
   $("#scenarioName").textContent = run.scenario.name;
-  $("#classification").textContent = run.scenario.scenarioType === "reference_event" ? `reference reconstruction, ~${run.scenario.referenceReleaseMillionM3 ?? 100} Mm3` : run.approximation ? "interactive scenario approximation" : "precomputed scenario model";
+  $("#classification").textContent = run.scenario.scenarioType === "reference_event" ? `representative event replay, ~${run.scenario.referenceReleaseMillionM3 ?? 100} Mm3` : run.approximation ? "interactive scenario approximation" : "precomputed scenario model";
   $("#frameStats").innerHTML = `
     <div><strong>${frame.maxDepthM.toFixed(1)}</strong><span>max depth m</span></div>
     <div><strong>${frame.velocityMS.toFixed(1)}</strong><span>velocity m/s</span></div>
-    <div><strong>${frame.hazardIndex.toFixed(1)}</strong><span>h x v index</span></div>
+    <div><strong>${frame.hazardIndex.toFixed(1)}</strong><span>hydraulic hazard proxy</span></div>
     <div><strong>${terrainSampleCount()}</strong><span>terrain samples</span></div>
   `;
   $("#metrics").innerHTML = run.metrics.map((metric) => `<div class="metric"><span>${metric.label}</span><strong>${metric.value} ${metric.unit}</strong><em>${metric.classification}</em></div>`).join("");
@@ -1300,7 +1444,7 @@ function renderObservedEvidencePanel() {
   const downstreamMetric = state.currentRun?.metrics.find((metric) => metric.id === "downstream");
   const sensors = [...new Set(scenes.map((feature) => feature.properties.sensor).filter(Boolean))].join(", ");
   $("#observedEvidence").innerHTML = `
-    <div class="evidence-head"><span>Observed evidence</span><strong>Real catalog + OSM layers</strong></div>
+    <div class="evidence-head"><span>Source data & mapped geography</span><strong>Catalog coverage + OSM layers</strong></div>
     <div class="evidence-grid">
       <div><strong>${postScenes.length}</strong><span>post-event satellite scenes</span></div>
       <div><strong>${communities.length}</strong><span>OSM communities near corridor</span></div>
@@ -1309,7 +1453,7 @@ function renderObservedEvidencePanel() {
       <div><strong>${downstreamTributaries.length}</strong><span>downstream tributaries</span></div>
       <div><strong>${downstreamMetric?.value ?? 0}</strong><span>modeled downstream assets</span></div>
     </div>
-    <p>Shown on the map: Planet scene footprints/times, mapped communities, tributaries, and lower Trishuli continuation. Downstream water depth/overflow remains representative until observed inundation polygons or hydraulic rasters are integrated.</p>
+    <p>Shown on the map: satellite acquisition footprints/times, mapped communities, tributaries, and lower Trishuli continuation. These footprints are source coverage, not observed flood polygons. Downstream water depth/overflow remains representative until observed inundation polygons or hydraulic rasters are integrated.</p>
     <a href="https://source.coop/planet/disasterdata/nepal-flash-flood-2026-08-26" target="_blank" rel="noreferrer">Planet/Source Cooperative STAC catalog</a>
     <em>${sensors ? `Sensors: ${sensors}` : "Sensor metadata pending"}</em>
   `;

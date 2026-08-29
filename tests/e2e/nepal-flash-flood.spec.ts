@@ -13,8 +13,8 @@ test("page opens centered on the Nepal flood corridor", async ({ page }) => {
   await expect(page.getByText("Upper catchment trigger")).toBeVisible();
   await expect(page.getByText("T+00 min | 26 Aug 2026, before first post-event collect")).toBeVisible();
   await expect(page.getByText("27 Aug 2026 02:00 UTC SkySat; 06:10 UTC Pelican")).toBeVisible();
-  await expect(page.getByText("Real catalog + OSM layers")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Replay August 26, 2026 Reference Reconstruction" })).toBeVisible();
+  await expect(page.locator("#observedEvidence").getByText("Source data & mapped geography")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Replay August 26, 2026 Representative Event" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Zoom in" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Zoom out" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Center on Nepal flood corridor" })).toBeVisible();
