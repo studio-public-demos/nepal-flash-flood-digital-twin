@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Nepal 2026 Flash Flood Digital Twin and What-If Simulator for the Nebula Cloud Studio Showcase.">
+  <meta name="cesium-ion-token" content="">
+  <title>Nepal Flash Flood Digital Twin | Nebula Cloud Studio Showcase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/cesium@1.121/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="https://studio-public-demos.github.io/" class="brand">STUDIO DEMOS</a>
+    <div class="topbar-copy">
+      <strong>Nepal Flash Flood Digital Twin</strong>
+      <span>Bhote Koshi / Trishuli to lower Trishuli corridor</span>
+    </div>
+    <a class="studio-link" href="https://nebulacloud.studio">nebulacloud.studio</a>
+  </header>
+
+  <main id="app">
+    <section class="hero">
+      <div class="viewport-shell" aria-label="3D digital twin viewport">
+        <div id="cesium"></div>
+        <canvas id="flowCanvas" aria-hidden="true"></canvas>
+        <div class="viewport-overlay">
+          <p class="disclaimer">Scenario-based research simulation. Not an official flood warning or evacuation system.</p>
+          <div class="event-pulse">
+            <span>26 Aug 2026 outburst flood</span>
+            <strong id="surgeReach">Surge building in the upper valley</strong>
+            <small id="surgeTime">Modeled replay T+00 min</small>
+            <em id="surgeCue">Sediment-laden water following the Bhote Koshi-Trishuli corridor</em>
+          </div>
+          <div class="scenario-chip">
+            <span id="classification">loading</span>
+            <strong id="scenarioName">Reference reconstruction</strong>
+          </div>
+        </div>
+        <nav class="map-controls" aria-label="3D map navigation controls">
+          <button id="zoomIn" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+          <button id="zoomOut" type="button" aria-label="Zoom out" title="Zoom out">-</button>
+          <button id="focusCorridor" type="button" aria-label="Center on Nepal flood corridor" title="Center on corridor">C</button>
+          <button id="tiltView" type="button" aria-label="Tilt 3D view" title="Tilt 3D view">3D</button>
+          <button id="northUp" type="button" aria-label="Reset north-up orientation" title="North up">N</button>
+        </nav>
+        <aside class="map-legend is-collapsed" aria-label="Map legend">
+          <button id="legendToggle" class="legend-toggle" type="button" aria-expanded="false" aria-controls="legendBody">
+            <strong>Legend</strong>
+            <span>9 layers</span>
+          </button>
+          <div id="legendBody" class="legend-body">
+          <dl>
+            <div><dt><span class="legend-swatch water-shallow"></span></dt><dd>Modeled shallow inundation</dd></div>
+            <div><dt><span class="legend-swatch water-deep"></span></dt><dd>Modeled deep channel flow</dd></div>
+            <div><dt><span class="legend-line surge"></span></dt><dd>Animated surge front / wave crests</dd></div>
+            <div><dt><span class="legend-line debris"></span></dt><dd>Sediment and debris streaks</dd></div>
+            <div><dt><span class="legend-outline satellite"></span></dt><dd>Observed Planet scene footprint</dd></div>
+            <div><dt><span class="legend-dot journey"></span></dt><dd>Journey annotation with modeled T+ and real collect time</dd></div>
+            <div><dt><span class="legend-line tributary"></span></dt><dd>Observed tributary / river reach</dd></div>
+            <div><dt><span class="legend-dot community"></span></dt><dd>Observed OSM community</dd></div>
+            <div><dt><span class="legend-dot asset"></span></dt><dd>Bridge, settlement, road or facility asset</dd></div>
+          </dl>
+          <p>Observed layers are real evidence. Water levels and overflows are representative until calibrated rasters are integrated.</p>
+          </div>
+        </aside>
+        <div id="appError" class="app-error" role="alert"></div>
+      </div>
+
+      <aside class="side-panel" aria-label="Digital twin controls">
+        <div id="onboarding" class="onboarding">
+          <button id="dismissOnboarding" aria-label="Dismiss onboarding">x</button>
+          <ol>
+            <li><strong>Replay</strong><span>Watch the flood move through the valley.</span></li>
+            <li><strong>Change</strong><span>Modify breach, rainfall and debris conditions.</span></li>
+            <li><strong>Simulate</strong><span>Run an interactive scenario.</span></li>
+            <li><strong>Compare</strong><span>See how downstream impacts change.</span></li>
+          </ol>
+        </div>
+
+        <section class="panel-section">
+          <h1>Nepal 2026 Flash Flood</h1>
+          <p>A 3D digital twin and what-if simulator for the Rasuwagadhi, Timure, Syabrubesi, Betrawati, Devighat, Galchhi, Malekhu and lower Trishuli downstream corridor.</p>
+          <button id="replay" class="primary">Replay August 26, 2026 Reference Reconstruction</button>
+        </section>
+
+        <section class="panel-section">
+          <h2>Source to Downstream</h2>
+          <ol id="storyRail" class="story-rail" aria-label="Flood source to downstream stages"></ol>
+        </section>
+
+        <section class="panel-section">
+          <h2>Timeline</h2>
+          <div class="timeline-head"><strong id="timeLabel">T+0</strong><select id="speed" aria-label="Replay speed"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option></select></div>
+          <input id="timeline" type="range" min="0" max="120" step="1" value="60" aria-label="Flood replay timeline">
+          <div class="ticks"><span>T+00</span><span>T+30</span><span>T+60</span><span>T+120</span></div>
+          <div class="button-row"><button id="playPause">Play</button><button id="restart">Restart</button></div>
+          <div id="frameStats" class="frame-stats"></div>
+        </section>
+
+        <section class="panel-section">
+          <h2>Layers</h2>
+          <div class="layer-grid">
+            <label><input type="checkbox" data-layer="waterDepth" checked>Water depth</label>
+            <label><input type="checkbox" data-layer="velocity">Velocity</label>
+            <label><input type="checkbox" data-layer="hazard">Hazard</label>
+            <label><input type="checkbox" data-layer="observedEvidence" checked>Observed evidence</label>
+            <label><input type="checkbox" data-layer="river">River</label>
+            <label><input type="checkbox" data-layer="roads" checked>Roads</label>
+            <label><input type="checkbox" data-layer="bridges" checked>Bridges</label>
+            <label><input type="checkbox" data-layer="settlements" checked>Settlements</label>
+            <label><input type="checkbox" data-layer="critical" checked>Critical infrastructure</label>
+          </div>
+        </section>
+      </aside>
+    </section>
+
+    <section class="workbench">
+      <div class="whatif">
+        <div class="section-title"><span>Mode 3</span><h2>What-If Lab</h2></div>
+        <p class="note">Interactive terrain-constrained scenario approximation. Results are estimated from precomputed hydrograph envelopes and Cesium terrain cross-sections; this is not a newly executed hydraulic solver.</p>
+        <div class="controls-grid">
+          <label>Precomputed scenario <select id="presetScenario"><option value="">Custom visitor scenario</option><option value="S1">S1 - 2 Mm3 Slow Overtopping</option><option value="S2">S2 - 3.5 Mm3 Partial Breach</option><option value="S3">S3 - 5 Mm3 Rapid Breach</option><option value="S4">S4 - 5 Mm3 Rapid Breach + Heavy Rainfall</option><option value="S5">S5 - 5 Mm3 Rapid Breach + 30% Debris Proxy</option><option value="S6">S6 - Bridge Obstruction Sensitivity</option><option value="S7">S7 - Secondary Blockage / Delayed Release</option></select></label>
+          <label>Barrier lake volume <output>2.0-5.0 million m3</output><input class="scenario-control" id="lakeVolume" type="range" min="2" max="5" step="0.1" value="5"></label>
+          <label>Breach mechanism <select class="scenario-control" id="breachMechanism"><option value="slow_overtopping">Slow overtopping</option><option value="partial_breach">Partial breach</option><option value="rapid_breach" selected>Rapid breach</option><option value="catastrophic_breach">Catastrophic breach</option></select></label>
+          <label>Breach duration <input class="scenario-control" id="breachDuration" type="number" min="10" max="120" value="35"></label>
+          <label>Relative breach width <select class="scenario-control" id="breachWidth"><option value="small">Small</option><option value="medium">Medium</option><option value="large" selected>Large</option><option value="extreme">Extreme</option></select></label>
+          <label>Rainfall <input class="scenario-control" id="rainfall" type="range" min="0.5" max="2" step="0.1" value="1.5"></label>
+          <label>Antecedent river flow <select class="scenario-control" id="antecedentFlow"><option value="low">Low</option><option value="normal">Normal</option><option value="high" selected>High</option><option value="extreme">Extreme</option></select></label>
+          <label>Debris content <input class="scenario-control" id="debris" type="range" min="0" max="50" step="1" value="30"></label>
+          <label>Channel roughness <select class="scenario-control" id="roughness"><option value="low">Low</option><option value="normal" selected>Normal</option><option value="high">High</option></select></label>
+          <label>Bridge condition <select class="scenario-control" id="bridgeCondition"><option value="existing" selected>Existing</option><option value="partially_blocked">Partially blocked</option><option value="fully_blocked">Fully blocked</option><option value="failed_open_channel">Failed/open channel</option></select></label>
+          <label class="check"><input class="scenario-control" id="secondaryBlockage" type="checkbox">Secondary blockage</label>
+        </div>
+        <div class="button-row"><button id="runScenario" class="primary">Run Scenario</button><button id="compareReference">Compare with Reference</button></div>
+        <p id="scenarioErrors" class="error" role="alert"></p>
+      </div>
+
+      <div class="results">
+        <div class="section-title"><span>Mode 4</span><h2>Results / Insights</h2></div>
+        <div id="observedEvidence" class="observed-evidence"></div>
+        <div id="metrics" class="metrics"></div>
+        <div id="comparison" class="comparison"></div>
+      </div>
+
+      <div class="asset" id="assetPanel">
+        <h2>Asset Inspection</h2>
+        <p>Click a bridge, settlement, road, or facility in the 3D view. Exposure is modeled intersection, not confirmed damage.</p>
+      </div>
+
+      <div class="mission">
+        <div class="section-title"><span>Showcase execution</span><h2>Studio Mission</h2></div>
+        <p>Powered by Nebula Cloud Studio. Studio orchestrates data, geospatial analysis, engineering simulation, verification and visualization as one executable mission.</p>
+        <ol id="missionLog" aria-live="polite"></ol>
+      </div>
+    </section>
+
+    <section class="methodology-panel" id="methodology">
+      <button id="methodologyToggle" class="method-toggle">Model & Data: how was this calculated?</button>
+      <div class="method-body">
+        <div>
+          <h2>Model & Data</h2>
+          <dl>
+            <div><dt>Model</dt><dd>Interactive scenario model</dd></div>
+            <div><dt>Version</dt><dd>nepal-flash-flood-surrogate-v0.1.0</dd></div>
+            <div><dt>Calibration</dt><dd>Representative / preliminary. Calibration dataset not yet integrated.</dd></div>
+            <div><dt>Terrain</dt><dd>Cesium World Terrain sampled along the corridor when configured; ellipsoid fallback otherwise.</dd></div>
+            <div><dt>Infrastructure</dt><dd>OpenStreetMap-derived corridor places plus representative demo asset IDs.</dd></div>
+            <div><dt>Flood outputs</dt><dd>Representative terrain-constrained inundation surfaces over real geography.</dd></div>
+            <div><dt>Reference reconstruction</dt><dd>Geopera and Planet Source Cooperative catalogs are cited only; non-commercial imagery/assets are not bundled.</dd></div>
+            <div><dt>Observed validation</dt><dd>Unavailable. IoU is not reported.</dd></div>
+          </dl>
+        </div>
+        <div>
+          <h2>Provenance</h2>
+          <p id="provenanceText"></p>
+          <p>Reference event context: Geopera's August 28, 2026 reconstruction reports an approximately 100 million m3 debris-laden release with substantial uncertainty. The smaller 2-5 million m3 barrier-lake controls below are future what-if scenarios, not the August 26 event.</p>
+          <nav class="doc-links" aria-label="Documentation">
+            <a href="./docs/METHODOLOGY.md">Methodology</a>
+            <a href="./docs/DATA_SOURCES.md">Data sources</a>
+            <a href="./docs/LICENSE_REVIEW.md">License review</a>
+            <a href="./docs/REFERENCE_RECONSTRUCTION.md">Reference reconstruction</a>
+            <a href="./docs/LIMITATIONS.md">Limitations</a>
+            <a href="./docs/ADDING_REAL_HECRAS_DATA.md">Adding real HEC-RAS data</a>
+            <a href="./docs/FUTURE_STUDIO_INTEGRATION.md">Future Studio integration</a>
+          </nav>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/cesium@1.121/Build/Cesium/Cesium.js"></script>
+  <script>
+    window.NEPAL_FLOOD_CONFIG = window.NEPAL_FLOOD_CONFIG || {};
+  </script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

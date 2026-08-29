@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+test-results/
+showcase/nepal-flash-flood/config.local.js
+showcase/nepal-flash-flood/config.local.json

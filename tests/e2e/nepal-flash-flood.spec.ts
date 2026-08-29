@@ -1,0 +1,48 @@
+import { expect, test } from "@playwright/test";
+
+test("visitor can replay, run, inspect, compare, and open methodology", async ({ page }) => {
+  test.setTimeout(120000);
+  await page.goto("/");
+  await expect(page.getByText("Scenario-based research simulation")).toBeVisible();
+  await expect(page.getByText("Source to Downstream")).toBeVisible();
+  await expect(page.getByText("Upper catchment trigger")).toBeVisible();
+  await expect(page.getByText("T+00 min | 26 Aug 2026, before first post-event collect")).toBeVisible();
+  await expect(page.getByText("27 Aug 2026 02:00 UTC SkySat; 06:10 UTC Pelican")).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Map legend" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Legend/ })).toHaveAttribute("aria-expanded", "false");
+  await page.getByRole("button", { name: /Legend/ }).click();
+  await expect(page.getByRole("button", { name: /Legend/ })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#legendBody")).toBeVisible();
+  await expect(page.locator("#legendBody")).toContainText("Modeled shallow inundation");
+  await expect(page.locator("#legendBody")).toContainText("Journey annotation with modeled T+ and real collect time");
+  await expect(page.locator("#legendBody")).toContainText("Observed Planet scene footprint");
+  await expect(page.getByText("Real catalog + OSM layers")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Replay August 26, 2026 Reference Reconstruction" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Zoom in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Zoom out" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Center on Nepal flood corridor" })).toBeVisible();
+  await expect(page.locator("#flowCanvas")).toBeVisible();
+  await expect.poll(async () => page.locator("#flowCanvas").evaluate((canvas: HTMLCanvasElement) => canvas.width > 0 && canvas.height > 0)).toBe(true);
+  await expect.poll(async () => page.locator(".viewport-shell").evaluate((element: HTMLElement) => Math.round(element.getBoundingClientRect().height))).toBeLessThanOrEqual(1000);
+  await expect.poll(async () => page.locator(".viewport-shell").evaluate((element: HTMLElement) => Math.round(element.getBoundingClientRect().width))).toBeGreaterThan(800);
+  await page.getByRole("button", { name: "Center on Nepal flood corridor" }).click();
+  await page.getByRole("button", { name: "Zoom in" }).click();
+
+  await page.getByRole("button", { name: "Replay August 26, 2026 Reference Reconstruction" }).click();
+  await page.locator("#timeline").fill("45");
+  await expect(page.locator("#timeLabel")).toContainText("T+45");
+  await expect(page.locator("#surgeTime")).toContainText("Evidence:");
+
+  await page.locator("#lakeVolume").evaluate((el: HTMLInputElement) => { el.value = "5"; el.dispatchEvent(new Event("change", { bubbles: true })); });
+  await page.locator("#rainfall").evaluate((el: HTMLInputElement) => { el.value = "1.5"; el.dispatchEvent(new Event("change", { bubbles: true })); });
+  await page.locator("#debris").evaluate((el: HTMLInputElement) => { el.value = "30"; el.dispatchEvent(new Event("change", { bubbles: true })); });
+  await page.getByRole("button", { name: "Run Scenario" }).click();
+  await expect(page.locator("#missionLog .complete")).toHaveCount(11);
+  await expect(page.locator("#scenarioName")).toContainText("Visitor what-if scenario");
+
+  await page.getByRole("button", { name: "Compare with Reference" }).click();
+  await expect(page.locator("#comparison")).toContainText("August 26 Reference Reconstruction");
+
+  await page.getByRole("button", { name: "Model & Data: how was this calculated?" }).click();
+  await expect(page.getByText("Calibration dataset not yet integrated")).toBeVisible();
+});

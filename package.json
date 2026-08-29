@@ -1,0 +1,25 @@
+{
+  "name": "nepal-flash-flood-digital-twin",
+  "version": "2.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate:nepal": "node scripts/data/generate-nepal-demo-data.mjs",
+    "build:nepal": "esbuild src/nepal-flash-flood/app.ts --bundle --format=esm --target=es2020 --outfile=app.js",
+    "build": "npm run build:nepal",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests --ext .ts",
+    "test": "vitest run tests/nepal-flash-flood",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.46.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "esbuild": "^0.23.0",
+    "eslint": "^9.9.0",
+    "http-server": "^14.1.1",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
