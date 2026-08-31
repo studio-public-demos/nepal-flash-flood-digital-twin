@@ -85,6 +85,21 @@ test("page opens centered on the Nepal flood corridor", async ({ page }) => {
       { timeout: 15000 },
     )
     .toBe(true);
+  const beforeEntityCount = await page.evaluate(() => window.NEPAL_FLOOD_CONFIG?.viewer?.entities.values.length ?? 0);
+  await page.locator('[data-layer="roads"]').setChecked(false);
+  await expect
+    .poll(() => page.evaluate(() => window.NEPAL_FLOOD_CONFIG?.viewer?.entities.values.length ?? 0))
+    .toBe(beforeEntityCount);
+  await page.locator('[data-layer="roads"]').setChecked(true);
+  await page.locator('[data-layer="hazard"]').setChecked(true);
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        hazardVisible: window.NEPAL_FLOOD_CONFIG?.viewer?.entities.getById("hazard-envelope")?.show ?? false,
+        staleWaterBands: ["shallow-inundation", "moderate-inundation", "deep-inundation"].some((id) => Boolean(window.NEPAL_FLOOD_CONFIG?.viewer?.entities.getById(id))),
+      })),
+    )
+    .toEqual({ hazardVisible: true, staleWaterBands: false });
   await expect(page.locator("#flowCanvas")).toBeAttached();
 });
 

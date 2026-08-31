@@ -424,6 +424,7 @@ var state = {
   flowParticles: [],
   flowAnimationStarted: false,
   lastFlowMs: 0,
+  renderQueued: false,
   timer: 0,
   mission: new ShowcaseMissionProvider(),
   engine: null
@@ -651,7 +652,9 @@ async function initCesium() {
       sceneModePicker: false,
       navigationHelpButton: false,
       infoBox: false,
-      selectionIndicator: false
+      selectionIndicator: false,
+      requestRenderMode: true,
+      maximumRenderTimeChange: Number.POSITIVE_INFINITY
     });
     window.NEPAL_FLOOD_CONFIG = { ...window.NEPAL_FLOOD_CONFIG, viewer: state.viewer };
     state.viewer.scene.skyBox.show = false;
@@ -1014,6 +1017,7 @@ function setEntityVisibility() {
   for (const entity of state.flowEntities) entity.show = state.layers.velocity;
   for (const entity of state.observedEntities) entity.show = state.layers.observedEvidence;
   for (const entity of state.journeyEntities) entity.show = state.layers.observedEvidence;
+  state.viewer?.scene?.requestRender?.();
 }
 function nearestTerrainHeight(lon, lat) {
   if (!state.terrainSamples.length) return 0;
@@ -1186,7 +1190,7 @@ function resetFlowParticle(particle, centerline, front) {
   particle.debris = Math.random() < 0.34;
 }
 function ensureFlowParticles(centerline, frameVelocityMS) {
-  const target = Math.round(Math.min(340, Math.max(150, 130 + frameVelocityMS * 24 + centerline.length * 1.4)));
+  const target = Math.round(Math.min(140, Math.max(70, 56 + frameVelocityMS * 12 + centerline.length * 0.45)));
   const { front } = visibleFlowWindow(centerline);
   while (state.flowParticles.length < target) {
     const particle = { progress: 0, lane: 0, speed: 0, size: 1, phase: 0, opacity: 0.5, debris: false };
@@ -1304,6 +1308,7 @@ function drawFluidOverlay(nowMs) {
   if (!state.flowAnimationStarted) return;
   window.requestAnimationFrame(drawFluidOverlay);
   if (!state.flowCanvas || !state.flowContext || !state.viewer || !window.Cesium || !state.currentRun) return;
+  if (nowMs - state.lastFlowMs < 32 && !state.playing) return;
   resizeFluidCanvas();
   const ctx = state.flowContext;
   const rect = state.flowCanvas.getBoundingClientRect();
@@ -1381,6 +1386,7 @@ function drawFluidOverlay(nowMs) {
   };
 }
 function renderFrame() {
+  state.renderQueued = false;
   const run = state.currentRun;
   if (!run || !state.viewer || !window.Cesium) {
     clearFluidCanvas();
@@ -1433,6 +1439,12 @@ function renderFrame() {
   }
   setEntityVisibility();
   renderMetrics();
+  state.viewer.scene.requestRender?.();
+}
+function scheduleRenderFrame() {
+  if (state.renderQueued) return;
+  state.renderQueued = true;
+  window.requestAnimationFrame(renderFrame);
 }
 function hazardColor(index) {
   const Cesium = window.Cesium;
@@ -1609,7 +1621,7 @@ function bindControls() {
     state.time = Number(event.target.value);
     state.playing = false;
     resetFluidMotion();
-    renderFrame();
+    scheduleRenderFrame();
     track("timeline_scrubbed", { time: state.time });
   });
   $("#speed").addEventListener("change", (event) => {
@@ -1617,10 +1629,11 @@ function bindControls() {
   });
   document.querySelectorAll("[data-layer]").forEach((input) => {
     input.addEventListener("change", () => {
-      state.layers[input.dataset.layer] = input.checked;
+      const layer = input.dataset.layer;
+      state.layers[layer] = input.checked;
       setEntityVisibility();
-      renderFrame();
-      track("layer_toggled", { layer: input.dataset.layer, enabled: input.checked });
+      if (layer === "waterDepth" || layer === "hazard" || layer === "velocity") scheduleRenderFrame();
+      track("layer_toggled", { layer, enabled: input.checked });
     });
   });
   document.querySelectorAll(".scenario-control").forEach((input) => {
@@ -1653,7 +1666,7 @@ function tick() {
       track("event_replay_completed");
     }
     $("#timeline").value = String(state.time);
-    renderFrame();
+    scheduleRenderFrame();
   }
   window.setTimeout(tick, 650);
 }

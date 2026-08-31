@@ -115,6 +115,7 @@ const state = {
   flowParticles: [] as FlowParticle[],
   flowAnimationStarted: false,
   lastFlowMs: 0,
+  renderQueued: false,
   timer: 0,
   mission: new ShowcaseMissionProvider(),
   engine: null as PrecomputedSimulationEngine | null,
@@ -358,6 +359,8 @@ async function initCesium() {
       navigationHelpButton: false,
       infoBox: false,
       selectionIndicator: false,
+      requestRenderMode: true,
+      maximumRenderTimeChange: Number.POSITIVE_INFINITY,
     });
     window.NEPAL_FLOOD_CONFIG = { ...window.NEPAL_FLOOD_CONFIG, viewer: state.viewer };
     state.viewer.scene.skyBox.show = false;
@@ -737,6 +740,7 @@ function setEntityVisibility() {
   for (const entity of state.flowEntities) entity.show = state.layers.velocity;
   for (const entity of state.observedEntities) entity.show = state.layers.observedEvidence;
   for (const entity of state.journeyEntities) entity.show = state.layers.observedEvidence;
+  state.viewer?.scene?.requestRender?.();
 }
 
 function nearestTerrainHeight(lon: number, lat: number): number {
@@ -928,7 +932,7 @@ function resetFlowParticle(particle: FlowParticle, centerline: number[][], front
 }
 
 function ensureFlowParticles(centerline: number[][], frameVelocityMS: number) {
-  const target = Math.round(Math.min(340, Math.max(150, 130 + frameVelocityMS * 24 + centerline.length * 1.4)));
+  const target = Math.round(Math.min(140, Math.max(70, 56 + frameVelocityMS * 12 + centerline.length * 0.45)));
   const { front } = visibleFlowWindow(centerline);
   while (state.flowParticles.length < target) {
     const particle: FlowParticle = { progress: 0, lane: 0, speed: 0, size: 1, phase: 0, opacity: 0.5, debris: false };
@@ -1056,6 +1060,7 @@ function drawFluidOverlay(nowMs: number) {
   if (!state.flowAnimationStarted) return;
   window.requestAnimationFrame(drawFluidOverlay);
   if (!state.flowCanvas || !state.flowContext || !state.viewer || !window.Cesium || !state.currentRun) return;
+  if (nowMs - state.lastFlowMs < 32 && !state.playing) return;
   resizeFluidCanvas();
   const ctx = state.flowContext;
   const rect = state.flowCanvas.getBoundingClientRect();
@@ -1137,6 +1142,7 @@ function drawFluidOverlay(nowMs: number) {
 }
 
 function renderFrame() {
+  state.renderQueued = false;
   const run = state.currentRun;
   if (!run || !state.viewer || !window.Cesium) {
     clearFluidCanvas();
@@ -1189,6 +1195,13 @@ function renderFrame() {
   }
   setEntityVisibility();
   renderMetrics();
+  state.viewer.scene.requestRender?.();
+}
+
+function scheduleRenderFrame() {
+  if (state.renderQueued) return;
+  state.renderQueued = true;
+  window.requestAnimationFrame(renderFrame);
 }
 
 function hazardColor(index: number) {
@@ -1383,7 +1396,7 @@ function bindControls() {
     state.time = Number((event.target as HTMLInputElement).value);
     state.playing = false;
     resetFluidMotion();
-    renderFrame();
+    scheduleRenderFrame();
     track("timeline_scrubbed", { time: state.time });
   });
   $("#speed").addEventListener("change", (event) => {
@@ -1391,10 +1404,11 @@ function bindControls() {
   });
   document.querySelectorAll<HTMLInputElement>("[data-layer]").forEach((input) => {
     input.addEventListener("change", () => {
-      state.layers[input.dataset.layer as keyof typeof state.layers] = input.checked;
+      const layer = input.dataset.layer as keyof typeof state.layers;
+      state.layers[layer] = input.checked;
       setEntityVisibility();
-      renderFrame();
-      track("layer_toggled", { layer: input.dataset.layer, enabled: input.checked });
+      if (layer === "waterDepth" || layer === "hazard" || layer === "velocity") scheduleRenderFrame();
+      track("layer_toggled", { layer, enabled: input.checked });
     });
   });
   document.querySelectorAll<HTMLInputElement | HTMLSelectElement>(".scenario-control").forEach((input) => {
@@ -1428,7 +1442,7 @@ function tick() {
       track("event_replay_completed");
     }
     $<HTMLInputElement>("#timeline").value = String(state.time);
-    renderFrame();
+    scheduleRenderFrame();
   }
   window.setTimeout(tick, 650);
 }
