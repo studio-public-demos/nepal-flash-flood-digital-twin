@@ -1,0 +1,31 @@
+{
+  "generatedAt": "2026-08-31T10:35:35.977Z",
+  "assets": [
+    {
+      "path": "videos/social/nepal-flash-flood-social-vertical.mp4",
+      "format": "1080x1920 vertical",
+      "intendedUse": "Instagram Reels, TikTok, YouTube Shorts, LinkedIn mobile feed"
+    },
+    {
+      "path": "videos/social/nepal-flash-flood-social-square.mp4",
+      "format": "1080x1080 square",
+      "intendedUse": "LinkedIn, X, Instagram feed"
+    },
+    {
+      "path": "videos/social/nepal-flash-flood-cover-vertical.png",
+      "format": "1080x1920 thumbnail candidate",
+      "intendedUse": "Vertical cover frame"
+    },
+    {
+      "path": "videos/social/nepal-flash-flood-cover-square.png",
+      "format": "1080x1080 thumbnail candidate",
+      "intendedUse": "Square cover frame"
+    },
+    {
+      "path": "videos/nepal-flash-flood-demo.mp4",
+      "format": "1280x720 landscape long demo",
+      "intendedUse": "YouTube, website, long LinkedIn demo post"
+    }
+  ],
+  "safetyReview": "No casualty counts are included. Copy says this is a research simulation and not an official warning or evacuation system."
+}

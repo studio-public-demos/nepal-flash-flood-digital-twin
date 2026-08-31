@@ -1,8 +1,9 @@
 {
-  "status": "WARN",
-  "generatedAt": "2026-08-29T18:34:03.821Z",
+  "status": "PASS",
+  "generatedAt": "2026-08-31T10:34:01.382Z",
   "qaScope": [
     "published point asset coordinates",
+    "published line asset coordinates",
     "explicit point asset height offsets",
     "water depth and velocity sanity bounds",
     "water polygon ring presence",
@@ -13,24 +14,5 @@
     "This static check does not sample live Cesium terrain elevations.",
     "It verifies renderer configuration and scenario data sanity, not calibrated hydraulic DEM residuals."
   ],
-  "findings": [
-    {
-      "severity": "WARN",
-      "code": "non_point_asset",
-      "message": "Spatial 3D QA currently checks point assets only.",
-      "context": {
-        "id": "river-bhote-koshi-trishuli",
-        "type": "LineString"
-      }
-    },
-    {
-      "severity": "WARN",
-      "code": "non_point_asset",
-      "message": "Spatial 3D QA currently checks point assets only.",
-      "context": {
-        "id": "road-corridor-line",
-        "type": "LineString"
-      }
-    }
-  ]
+  "findings": []
 }

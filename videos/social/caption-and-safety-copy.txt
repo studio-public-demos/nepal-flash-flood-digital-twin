@@ -1,0 +1,11 @@
+Primary caption:
+Nepal Flash Flood Digital Twin: a research showcase for replaying terrain-constrained flood movement, exploring downstream exposure, and testing what-if conditions across the Bhote Koshi-Trishuli corridor.
+
+Safety line:
+Scenario-based research simulation. Not an official flood warning, evacuation, damage assessment, or engineering design tool.
+
+Source/provenance line:
+References include OpenStreetMap contributors, public Planet Source Cooperative STAC metadata, and Geopera's published August 2026 reconstruction context. Imagery pixels and non-commercial derived products are not redistributed in this public build.
+
+Suggested hashtags:
+#DigitalTwin #FloodRisk #Geospatial #DisasterResponse #Nepal #RemoteSensing #Simulation #InfrastructureResilience

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("page opens centered on the Nepal flood corridor", async ({ page }) => {
-  test.setTimeout(60000);
+  test.setTimeout(90000);
   const satelliteTileRequests: string[] = [];
   page.on("request", (request) => {
     const url = request.url();
@@ -64,6 +64,27 @@ test("page opens centered on the Nepal flood corridor", async ({ page }) => {
       { timeout: 45000 },
     )
     .toBe(true);
+  await page.locator("#timeline").evaluate((element) => {
+    const input = element as HTMLInputElement;
+    input.value = "90";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const viewer = window.NEPAL_FLOOD_CONFIG?.viewer;
+          if (!viewer) return { waterBands: 0, minVertices: 0 };
+          const waterBands = ["shallow-inundation", "moderate-inundation", "deep-inundation"]
+            .map((id) => viewer.entities.getById(id))
+            .filter(Boolean);
+          const vertexCounts = waterBands.map((entity: any) => entity.polygon?.hierarchy?.getValue?.()?.positions?.length ?? 0);
+          return waterBands.length === 3 && Math.min(...vertexCounts) >= 100;
+        }),
+      { timeout: 15000 },
+    )
+    .toBe(true);
   await expect(page.locator("#flowCanvas")).toBeAttached();
 });
 
@@ -83,4 +104,17 @@ test("mobile layout keeps the map usable without horizontal overflow", async ({ 
       })),
     )
     .toEqual({ scrollWidth: 360, innerWidth: 360 });
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const controls = document.querySelector(".map-controls")?.getBoundingClientRect();
+        const pulse = document.querySelector(".event-pulse")?.getBoundingClientRect();
+        const attribution = document.querySelector(".cesium-widget-credits")?.getBoundingClientRect();
+        if (!controls || !pulse || !attribution) return false;
+        const overlaps = (a: DOMRect, b: DOMRect) =>
+          a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+        return !overlaps(controls, pulse) && !overlaps(controls, attribution);
+      }),
+    )
+    .toBe(true);
 });

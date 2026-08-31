@@ -841,7 +841,8 @@ function drawInundationBand(Cesium: any, points: number[][], depthM: number, col
         hierarchy: normalized.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, nearestTerrainHeight(lon, lat) + Math.max(0.2, depthM))),
         material: color,
         perPositionHeight: true,
-        outline: false,
+        outline: true,
+        outlineColor: Cesium.Color.fromCssColorString("#e0f2fe").withAlpha(0.48),
       },
     }),
   );
@@ -916,8 +917,8 @@ function ensureFlowParticles(centerline: number[][], frameVelocityMS: number) {
 
 function flowHalfWidthAt(frame: ReturnType<typeof frameAt>, progress: number) {
   const index = Math.max(0, Math.min(state.terrainSections.length - 1, Math.round(progress)));
-  const maximumWidthM = Math.max(900, 1100 + frame.meanDepthM * 520);
-  const halfMinimum = 210;
+  const maximumWidthM = Math.max(1500, 1800 + frame.meanDepthM * 720);
+  const halfMinimum = 360;
   const halfMaximum = maximumWidthM / 2;
   const section = state.terrainSections[index];
   if (!section) return halfMinimum;
@@ -944,15 +945,15 @@ function drawFlowCrests(ctx: CanvasRenderingContext2D, Cesium: any, centerline: 
   let drawn = 0;
   for (let progress = back + ((nowSeconds * frame.velocityMS * 1.8) % 5); progress < front; progress += 5.5) {
     const halfWidth = flowHalfWidthAt(frame, progress);
-    const left = offsetFromProgress(centerline, progress, -halfWidth * 0.78);
-    const right = offsetFromProgress(centerline, progress, halfWidth * 0.78);
+    const left = offsetFromProgress(centerline, progress, -halfWidth * 0.94);
+    const right = offsetFromProgress(centerline, progress, halfWidth * 0.94);
     const height = visualWaterSurfaceHeight((left[0] + right[0]) / 2, (left[1] + right[1]) / 2, frame, 0.9);
     const a = projectToCanvas(Cesium, left[0], left[1], height);
     const b = projectToCanvas(Cesium, right[0], right[1], height);
     if (!a || !b) continue;
-    const alpha = 0.08 + 0.12 * (0.5 + Math.sin(nowSeconds * 4 + progress) * 0.5);
+    const alpha = 0.14 + 0.16 * (0.5 + Math.sin(nowSeconds * 4 + progress) * 0.5);
     ctx.strokeStyle = `rgba(226, 246, 255, ${alpha.toFixed(3)})`;
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = 2.1;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
@@ -1063,7 +1064,7 @@ function drawFluidOverlay(nowMs: number) {
     if (particle.progress > front || particle.progress < back - 2) resetFlowParticle(particle, centerline, front);
     const halfWidth = flowHalfWidthAt(frame, particle.progress);
     const pulse = Math.sin(nowSeconds * 2.8 + particle.phase);
-    const laneOffsetM = particle.lane * halfWidth * (0.42 + 0.11 * pulse);
+    const laneOffsetM = particle.lane * halfWidth * (0.62 + 0.16 * pulse);
     const head = offsetFromProgress(centerline, particle.progress, laneOffsetM);
     const tail = offsetFromProgress(centerline, Math.max(0, particle.progress - 0.44 - frame.velocityMS * 0.035), laneOffsetM * 0.92);
     const height = visualWaterSurfaceHeight(head[0], head[1], frame, particle.debris ? 0.55 : 0.8);
@@ -1084,7 +1085,7 @@ function drawFluidOverlay(nowMs: number) {
       gradient.addColorStop(1, `rgba(240, 249, 255, ${alpha.toFixed(3)})`);
     }
     ctx.strokeStyle = gradient;
-    ctx.lineWidth = particle.size + frame.meanDepthM * 0.2;
+    ctx.lineWidth = particle.size + 1.2 + frame.meanDepthM * 0.32;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo((a.x + b.x) / 2 + Math.sin(nowSeconds * 5 + particle.phase) * 2.2, (a.y + b.y) / 2 + Math.cos(nowSeconds * 4 + particle.phase) * 1.4);
@@ -1128,18 +1129,19 @@ function renderFrame() {
   const arrivalCurve = frame.arrivalTimeByKm?.length ? frame.arrivalTimeByKm : buildArrivalCurve(run.scenario, frame.centerline);
   const frontDistanceKm = frame.frontDistanceKm ?? frontDistanceAt(arrivalCurve, state.time);
   const distances = cumulativeKm(frame.centerline);
-  const visibleCount = Math.max(2, distances.findIndex((distance) => distance >= frontDistanceKm));
+  const reachedIndex = distances.findIndex((distance) => distance >= frontDistanceKm);
+  const visibleCount = reachedIndex === -1 ? frame.centerline.length : Math.max(2, reachedIndex + 1);
   const visibleCenterline = frame.centerline.slice(0, visibleCount > 1 ? visibleCount : 2);
   if (state.layers.waterDepth || state.layers.hazard) {
-    const shallow = terrainConstrainedFootprint(visibleCenterline, Math.max(45, frame.maxDepthM * 24), 420, Math.max(900, 1100 + frame.meanDepthM * 520));
-    const moderate = terrainConstrainedFootprint(visibleCenterline, Math.max(24, frame.meanDepthM * 18), 260, Math.max(560, 700 + frame.meanDepthM * 300));
-    const deep = terrainConstrainedFootprint(visibleCenterline, Math.max(12, frame.meanDepthM * 9), 140, Math.max(320, 380 + frame.maxDepthM * 120));
+    const shallow = terrainConstrainedFootprint(visibleCenterline, Math.max(58, frame.maxDepthM * 28), 720, Math.max(1500, 1800 + frame.meanDepthM * 720));
+    const moderate = terrainConstrainedFootprint(visibleCenterline, Math.max(32, frame.meanDepthM * 22), 460, Math.max(980, 1160 + frame.meanDepthM * 440));
+    const deep = terrainConstrainedFootprint(visibleCenterline, Math.max(16, frame.meanDepthM * 11), 260, Math.max(560, 640 + frame.maxDepthM * 180));
     if (state.layers.hazard) {
       drawInundationBand(Cesium, shallow, frame.meanDepthM, hazardColor(frame.hazardIndex), "hazard-envelope");
     } else {
-      drawInundationBand(Cesium, shallow, frame.meanDepthM * 0.45, Cesium.Color.fromCssColorString("#7dd3fc").withAlpha(0.62), "shallow-inundation");
-      drawInundationBand(Cesium, moderate, frame.meanDepthM * 0.85, Cesium.Color.fromCssColorString("#0ea5e9").withAlpha(0.68), "moderate-inundation");
-      drawInundationBand(Cesium, deep, frame.maxDepthM, Cesium.Color.fromCssColorString("#075985").withAlpha(0.76), "deep-inundation");
+      drawInundationBand(Cesium, shallow, frame.meanDepthM * 0.45, Cesium.Color.fromCssColorString("#38bdf8").withAlpha(0.68), "shallow-inundation");
+      drawInundationBand(Cesium, moderate, frame.meanDepthM * 0.85, Cesium.Color.fromCssColorString("#0284c7").withAlpha(0.76), "moderate-inundation");
+      drawInundationBand(Cesium, deep, frame.maxDepthM, Cesium.Color.fromCssColorString("#0f4c81").withAlpha(0.86), "deep-inundation");
     }
   }
   if (state.layers.velocity) {

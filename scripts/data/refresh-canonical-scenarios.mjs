@@ -33,11 +33,25 @@ const scenarioData = JSON.parse(readFileSync(scenarioDataPath, "utf8"));
 const infrastructure = JSON.parse(readFileSync(infrastructurePath, "utf8"));
 const assets = infrastructure.features.filter((feature) => feature.geometry?.type === "Point").map((feature) => feature.properties);
 
-function offsetPoint([lon, lat], width, side) {
-  return [Number((lon + width * side * 0.0017).toFixed(6)), Number((lat + width * side * 0.0011).toFixed(6))];
+function offsetFromCenterline(corridor, index, offsetMeters) {
+  const point = corridor[index] ?? corridor[0];
+  const previous = corridor[Math.max(0, index - 1)] ?? point;
+  const next = corridor[Math.min(corridor.length - 1, index + 1)] ?? point;
+  const lon = point?.[0] ?? 0;
+  const lat = point?.[1] ?? 0;
+  const metersPerLonDegree = Math.max(1, 111320 * Math.cos((lat * Math.PI) / 180));
+  const dx = ((next?.[0] ?? lon) - (previous?.[0] ?? lon)) * metersPerLonDegree;
+  const dy = ((next?.[1] ?? lat) - (previous?.[1] ?? lat)) * 110540;
+  const length = Math.max(1, Math.hypot(dx, dy));
+  const normalX = -dy / length;
+  const normalY = dx / length;
+  return [
+    Number((lon + (normalX * offsetMeters) / metersPerLonDegree).toFixed(6)),
+    Number((lat + (normalY * offsetMeters) / 110540).toFixed(6)),
+  ];
 }
 
-function footprintFor(corridor, frontDistanceKm, width) {
+function footprintFor(corridor, frontDistanceKm, widthMeters) {
   const distances = [0];
   for (let index = 1; index < corridor.length; index += 1) {
     const a = corridor[index - 1];
@@ -49,10 +63,18 @@ function footprintFor(corridor, frontDistanceKm, width) {
     const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
     distances.push(distances.at(-1) + 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h))));
   }
-  const reached = Math.max(2, distances.findIndex((distance) => distance >= frontDistanceKm));
+  const reachedIndex = distances.findIndex((distance) => distance >= frontDistanceKm);
+  const reached = reachedIndex === -1 ? corridor.length : Math.max(2, reachedIndex + 1);
   const slice = corridor.slice(0, reached > 1 ? reached : Math.min(2, corridor.length));
-  const left = slice.map((point, index) => offsetPoint(point, width * (0.65 + index / Math.max(1, corridor.length)), -1));
-  const right = slice.toReversed().map((point, index) => offsetPoint(point, width * (0.8 + index / Math.max(1, corridor.length)), 1));
+  const left = slice.map((_, index) => {
+    const taper = 0.72 + index / Math.max(1, corridor.length - 1) * 0.28;
+    return offsetFromCenterline(corridor, index, -widthMeters * taper * 0.5);
+  });
+  const right = slice.toReversed().map((_, reverseIndex) => {
+    const index = slice.length - 1 - reverseIndex;
+    const taper = 0.72 + index / Math.max(1, corridor.length - 1) * 0.28;
+    return offsetFromCenterline(corridor, index, widthMeters * taper * 0.5);
+  });
   return [...left, ...right];
 }
 
@@ -67,7 +89,8 @@ function frameValues(scenario, timeMinutes, peakDischarge, intensity) {
   const dischargeRatio = Math.max(0.05, Math.min(1.15, local || peakDischarge / Math.max(peakDischarge, 1) * 0.05));
   const meanDepthM = Number((0.12 + dischargeRatio * intensity * 0.78).toFixed(2));
   const maxDepthM = Number((meanDepthM * (1.72 + intensity * 0.12)).toFixed(2));
-  const velocityMS = Number((0.35 + dischargeRatio * Math.sqrt(Math.max(peakDischarge, 1)) / 33).toFixed(2));
+  const debrisVelocityFactor = 1 + Math.min(0.18, scenario.debrisPercent / 300);
+  const velocityMS = Number(((0.35 + dischargeRatio * Math.sqrt(Math.max(peakDischarge, 1)) / 33) * debrisVelocityFactor).toFixed(2));
   return { meanDepthM, maxDepthM, velocityMS, hazardIndex: Number((maxDepthM * velocityMS).toFixed(2)) };
 }
 
@@ -99,7 +122,7 @@ scenarioData.runs = scenarioData.runs.map((run) => {
       footprint: footprintFor(
         scenarioData.corridor,
         frontDistanceKm,
-        (0.28 + Math.min(1.6, intensity) * 0.25 + Math.sqrt(values.meanDepthM) * 0.16) * (1 + Math.max(0, scenario.rainfallMultiplier - 1) * 0.24),
+        (620 + Math.min(4.2, intensity) * 210 + Math.sqrt(values.meanDepthM) * 170) * (1 + Math.max(0, scenario.rainfallMultiplier - 1) * 0.24),
       ),
       centerline: scenarioData.corridor,
       frontDistanceKm,

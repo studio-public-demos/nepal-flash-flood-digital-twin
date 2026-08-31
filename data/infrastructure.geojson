@@ -232,6 +232,34 @@
     {
       "type": "Feature",
       "properties": {
+        "id": "settlement-devighat",
+        "name": "Devighat",
+        "canonicalName": "Devighat",
+        "localName": "देवीघाट",
+        "kind": "settlement",
+        "coordinates": [
+          85.1100635,
+          27.8600323
+        ],
+        "corridorKm": 57.8,
+        "officialNameVerified": true,
+        "classification": "observed",
+        "osmId": 4156044161,
+        "osmType": "node",
+        "source": "OpenStreetMap Nominatim place result for Devighat, Nuwakot, Nepal",
+        "confidence": "medium"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          85.1100635,
+          27.8600323
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
         "id": "settlement-galchhi",
         "name": "Galchhi",
         "kind": "settlement",

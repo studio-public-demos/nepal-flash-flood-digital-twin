@@ -1,7 +1,11 @@
 node_modules/
+.cache/
 .DS_Store
 Thumbs.db
 *.log
 test-results/
+videos/raw/
+videos/polly-parts/
+videos/thumbs/
 showcase/nepal-flash-flood/config.local.js
 showcase/nepal-flash-flood/config.local.json

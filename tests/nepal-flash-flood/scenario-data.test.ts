@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { buildReleaseHydrograph, buildMetrics, calculateAssetExposure, compareRuns, frameAt, scenarioIntensity, TIMELINE, validateScenario } from "../../src/nepal-flash-flood/engine";
+import { cumulativeKm, distanceKm, polygonAreaHa } from "../../src/nepal-flash-flood/geometry";
 import { hazardIndex } from "../../src/nepal-flash-flood/hazard";
 import type { InfrastructureAsset, SimulationRun } from "../../src/nepal-flash-flood/domain";
 
@@ -19,6 +20,10 @@ const assets = infrastructure.features
 
 const metric = (run: SimulationRun, id: string) => run.metrics.find((item) => item.id === id)?.value;
 const run = (id: string) => scenarioData.runs.find((item) => item.id === id);
+
+function distanceToEnvelopeKm(point: number[], ring: number[][]): number {
+  return Math.min(...ring.map((vertex) => distanceKm(point, vertex)));
+}
 
 describe("bundled Nepal flood scenario data", () => {
   it("ships the reference reconstruction and seven named what-if scenarios", () => {
@@ -89,6 +94,26 @@ describe("bundled Nepal flood scenario data", () => {
       }
       expect(frameAt(item, 75).timeMinutes).toBe(75);
       expect(frameAt(item, 75).classification).toBe("estimated");
+    }
+  });
+
+  it("keeps flood envelopes broad, visible, and centered on the mapped river geometry", () => {
+    for (const item of scenarioData.runs) {
+      const firstFrame = item.frames[0];
+      expect(firstFrame, `${item.id} has frames`).toBeTruthy();
+      if (!firstFrame) continue;
+      const peakFrame = item.frames.reduce((best, frame) => (polygonAreaHa(frame.footprint) > polygonAreaHa(best.footprint) ? frame : best), firstFrame);
+      expect(polygonAreaHa(peakFrame.footprint), `${item.id} visible flood envelope area`).toBeGreaterThan(900);
+      for (const frame of item.frames.filter((candidate) => (candidate.frontDistanceKm ?? 0) > 10)) {
+        const distances = cumulativeKm(frame.centerline);
+        const visibleCenterline = frame.centerline.filter((_, index) => (distances[index] ?? 0) <= (frame.frontDistanceKm ?? 0));
+        const sampleEvery = Math.max(1, Math.floor(visibleCenterline.length / 12));
+        const sampled = visibleCenterline.filter((_, index) => index > 0 && index < visibleCenterline.length - 1 && index % sampleEvery === 0);
+        expect(sampled.length, `${item.id} sampled centerline`).toBeGreaterThan(1);
+        const edgeDistances = sampled.map((point) => distanceToEnvelopeKm(point, frame.footprint));
+        expect(Math.max(...edgeDistances), `${item.id} centerline stays near flood envelope`).toBeLessThan(2.1);
+        expect(Math.max(...edgeDistances), `${item.id} envelope is visibly broad around centerline`).toBeGreaterThan(0.25);
+      }
     }
   });
 

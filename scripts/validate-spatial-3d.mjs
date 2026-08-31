@@ -25,16 +25,28 @@ function isLonLat(coordinates) {
   );
 }
 
+function allLineCoordinatesAreLonLat(coordinates) {
+  return Array.isArray(coordinates) && coordinates.length >= 2 && coordinates.every(isLonLat);
+}
+
 for (const feature of infrastructure.features ?? []) {
   const id = feature.properties?.id ?? "unknown";
-  if (feature.geometry?.type !== "Point") {
-    add("WARN", "non_point_asset", "Spatial 3D QA currently checks point assets only.", { id, type: feature.geometry?.type });
-    continue;
-  }
-  if (!isLonLat(feature.geometry.coordinates)) {
+  if (feature.geometry?.type === "Point" && !isLonLat(feature.geometry.coordinates)) {
     add("FAIL", "invalid_asset_coordinate", "Point asset coordinate is outside the Nepal corridor bounds or malformed.", {
       id,
       coordinates: feature.geometry?.coordinates,
+    });
+  }
+  if (feature.geometry?.type === "LineString" && !allLineCoordinatesAreLonLat(feature.geometry.coordinates)) {
+    add("FAIL", "invalid_asset_line_coordinate", "Line asset contains a coordinate outside the Nepal corridor bounds or has too few vertices.", {
+      id,
+      type: feature.geometry?.type,
+    });
+  }
+  if (!["Point", "LineString"].includes(feature.geometry?.type)) {
+    add("FAIL", "unsupported_asset_geometry", "Published infrastructure asset uses an unsupported geometry type.", {
+      id,
+      type: feature.geometry?.type,
     });
   }
   if (Number.isFinite(feature.properties?.heightM) && Math.abs(feature.properties.heightM) > 20) {
@@ -102,6 +114,7 @@ const report = {
   generatedAt: new Date().toISOString(),
   qaScope: [
     "published point asset coordinates",
+    "published line asset coordinates",
     "explicit point asset height offsets",
     "water depth and velocity sanity bounds",
     "water polygon ring presence",
