@@ -5,7 +5,7 @@
 - `videos/social/nepal-flash-flood-social-vertical.mp4` is the 1080x1920 short-form version for Reels, TikTok, YouTube Shorts and mobile-first LinkedIn.
 - `videos/social/nepal-flash-flood-social-square.mp4` is the 1080x1080 feed version for LinkedIn, X and Instagram feed.
 - `videos/social/nepal-flash-flood-cover-vertical.png` and `videos/social/nepal-flash-flood-cover-square.png` are cover-frame candidates.
-- `videos/nepal-flash-flood-demo.mp4` remains the long 1280x720 walkthrough for YouTube, website embeds and detailed LinkedIn posts.
+- `videos/nepal-flash-flood-platform-demo-1080p.mp4` is the publish-ready 1920x1080 live platform walkthrough for YouTube, website embeds and detailed LinkedIn posts.
 - `videos/social/caption-and-safety-copy.txt` contains publish-safe caption copy and hashtags.
 
 ## Required Caption Safety Line

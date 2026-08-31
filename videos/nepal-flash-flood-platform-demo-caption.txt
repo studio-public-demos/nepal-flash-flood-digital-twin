@@ -1,0 +1,1 @@
+Nepal Flash Flood Digital Twin live platform demo: terrain-constrained replay, evidence layers, what-if scenarios, downstream comparison and methodology. Scenario-based research simulation; not an official flood warning, evacuation, damage assessment or engineering design tool.

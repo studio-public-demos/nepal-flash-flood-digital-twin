@@ -660,7 +660,7 @@ async function initCesium() {
     state.viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#e5e7eb");
     state.viewer.imageryLayers.removeAll();
     state.viewer.imageryLayers.addImageryProvider(imageryProvider);
-    state.viewer.scene.globe.depthTestAgainstTerrain = true;
+    state.viewer.scene.globe.depthTestAgainstTerrain = false;
     focusCorridor(0);
     await sampleCorridorTerrain();
     drawStaticLayers();
@@ -1108,7 +1108,29 @@ function drawInundationBand(Cesium, points, depthM, color, id) {
         material: color,
         perPositionHeight: true,
         outline: true,
-        outlineColor: Cesium.Color.fromCssColorString("#e0f2fe").withAlpha(0.48)
+        outlineColor: Cesium.Color.fromCssColorString("#e0f2fe").withAlpha(0.82)
+      }
+    })
+  );
+}
+function drawWaterSpine(Cesium, centerline, frame) {
+  if (centerline.length < 2 || frame.meanDepthM <= 0) return;
+  const positions = centerline.flatMap((point) => {
+    const lon = point[0];
+    const lat = point[1];
+    if (typeof lon !== "number" || typeof lat !== "number" || !Number.isFinite(lon) || !Number.isFinite(lat)) return [];
+    return [Cesium.Cartesian3.fromDegrees(lon, lat, nearestTerrainHeight(lon, lat) + Math.max(18, frame.meanDepthM * 7))];
+  });
+  if (positions.length < 2) return;
+  state.waterEntities.push(
+    state.viewer.entities.add({
+      id: "visible-water-spine",
+      name: `${state.currentRun?.scenario.name ?? "Scenario"} visible water stream`,
+      polyline: {
+        positions,
+        width: Math.max(12, Math.min(26, 12 + frame.meanDepthM * 2.6)),
+        material: Cesium.Color.fromCssColorString("#67e8f9").withAlpha(0.96),
+        clampToGround: false
       }
     })
   );
@@ -1384,9 +1406,10 @@ function renderFrame() {
     if (state.layers.hazard) {
       drawInundationBand(Cesium, shallow, frame.meanDepthM, hazardColor(frame.hazardIndex), "hazard-envelope");
     } else {
-      drawInundationBand(Cesium, shallow, frame.meanDepthM * 0.45, Cesium.Color.fromCssColorString("#38bdf8").withAlpha(0.68), "shallow-inundation");
-      drawInundationBand(Cesium, moderate, frame.meanDepthM * 0.85, Cesium.Color.fromCssColorString("#0284c7").withAlpha(0.76), "moderate-inundation");
-      drawInundationBand(Cesium, deep, frame.maxDepthM, Cesium.Color.fromCssColorString("#0f4c81").withAlpha(0.86), "deep-inundation");
+      drawInundationBand(Cesium, shallow, frame.meanDepthM * 0.45, Cesium.Color.fromCssColorString("#22d3ee").withAlpha(0.82), "shallow-inundation");
+      drawInundationBand(Cesium, moderate, frame.meanDepthM * 0.85, Cesium.Color.fromCssColorString("#0ea5e9").withAlpha(0.9), "moderate-inundation");
+      drawInundationBand(Cesium, deep, frame.maxDepthM, Cesium.Color.fromCssColorString("#0369a1").withAlpha(0.95), "deep-inundation");
+      drawWaterSpine(Cesium, visibleCenterline, frame);
     }
   }
   if (state.layers.velocity) {
